@@ -11,7 +11,7 @@
   <a href="https://golang.org"><img src="https://img.shields.io/badge/Backend-Go%201.25+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Backend Go" /></a>
   <a href="https://react.dev"><img src="https://img.shields.io/badge/Frontend-React%2019%20%2B%20TS-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="Frontend React 19" /></a>
   <a href="SECURITY.md"><img src="https://img.shields.io/badge/Security-Windows%20DPAPI%20%2B%20HMAC-2E7D32?style=for-the-badge&logo=shield&logoColor=white" alt="Security DPAPI" /></a>
-  <a href="#-ai-assisted-development--tuyen-bo-phat-trien-cung-ai"><img src="https://img.shields.io/badge/AI%20Assisted-Google%20DeepMind%20Antigravity-8E24AA?style=for-the-badge&logo=google&logoColor=white" alt="AI Assisted" /></a>
+  <a href="#-ai-assisted-development--tuyen-bo-phat-trien-cung-ai"><img src="https://img.shields.io/badge/AI%20Assisted-Google%20Antigravity-8E24AA?style=for-the-badge&logo=google&logoColor=white" alt="AI Assisted" /></a>
 </p>
 
 ---
