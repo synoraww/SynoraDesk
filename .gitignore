@@ -12,7 +12,8 @@ vendor/
 
 # Frontend build output
 dist/
-frontend/dist/
+frontend/dist/*
+!frontend/dist/.gitkeep
 
 # Local databases and runtime state
 *.db

@@ -24,6 +24,16 @@ jobs:
       - name: Download Go Dependencies
         run: go mod download
 
+      - name: Prepare Frontend Dist for Embed
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "frontend/dist")) {
+            New-Item -ItemType Directory -Path "frontend/dist" -Force | Out-Null
+          }
+          if (-not (Test-Path "frontend/dist/index.html")) {
+            Set-Content -Path "frontend/dist/index.html" -Value "<html><body>SynoraDesk CI Placeholder</body></html>" -Encoding UTF8
+          }
+
       - name: Run Backend Tests
         run: go test -v ./...
 

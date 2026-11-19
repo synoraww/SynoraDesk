@@ -37,11 +37,15 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Build Frontend
+        working-directory: frontend
+        run: npm run build
+
       - name: Run Backend Tests
         run: go test -v ./...
 
       - name: Build Wails App
-        run: wails build -platform windows/amd64 -clean
+        run: wails build -platform windows/amd64 -s
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
