@@ -47,7 +47,12 @@
     "retry": "Thử lại",
     "reset": "Đặt lại",
     "done": "Hoàn tất & Đóng",
-    "detachedBadge": "Cửa sổ phụ"
+    "detachedBadge": "Cửa sổ phụ",
+    "tabAlreadyOpen": "Đã chuyển đến tab đang mở (tránh mở 2 tab trùng lặp)",
+    "multiTabTitle": "Phát hiện mở 2 tab:",
+    "multiTabDesc": "SynoraDesk đang được mở ở một tab khác. Để tránh xung đột dữ liệu phiên và bộ nhớ, bạn nên sử dụng tab trước đó.",
+    "useThisTab": "Sử dụng tab này",
+    "dismiss": "Bỏ qua"
   },
   "nav": {
     "servers": "Máy chủ",

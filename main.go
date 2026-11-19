@@ -12,6 +12,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
@@ -76,13 +77,27 @@ func main() {
 		}
 	}
 
+	var singleInstanceLock *options.SingleInstanceLock
+	if !*detachedFlag {
+		singleInstanceLock = &options.SingleInstanceLock{
+			UniqueId: "synoradesk-single-instance-guard-v1",
+			OnSecondInstanceLaunch: func(secondInstanceData options.SecondInstanceData) {
+				if app.ctx != nil {
+					wailsruntime.WindowUnminimise(app.ctx)
+					wailsruntime.Show(app.ctx)
+				}
+			},
+		}
+	}
+
 	err := wails.Run(&options.App{
-		Title:     windowTitle,
-		Width:     width,
-		Height:    height,
-		MinWidth:  minWidth,
-		MinHeight: minHeight,
-		Frameless: true,
+		Title:              windowTitle,
+		Width:              width,
+		Height:             height,
+		MinWidth:           minWidth,
+		MinHeight:          minHeight,
+		SingleInstanceLock: singleInstanceLock,
+		Frameless:          true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

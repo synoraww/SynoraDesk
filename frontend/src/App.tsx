@@ -13,6 +13,7 @@ import { SFTPExplorerPage } from './pages/SFTPExplorer';
 import { DatabaseManagerPage } from './pages/DatabaseManager';
 import { FileEditorTab } from './components/common/FileEditorTab';
 import { WelcomeModal } from './components/common/WelcomeModal';
+import { MultiTabAlertBanner } from './components/common/MultiTabAlertBanner';
 import { APP_CONFIG } from './config/version';
 import { usePanelStore } from './stores/panelStore';
 import { useUIStore } from './stores/uiStore';
@@ -505,6 +506,9 @@ export function App() {
           onClose={() => setIsWelcomeOpen(false)}
           canDismissWithoutAccept={false}
         />
+
+        {/* Multi-Tab Conflict Alert Banner */}
+        <MultiTabAlertBanner />
       </AppShell>
 
       {/* Floating Zoom Indicator Pill */}

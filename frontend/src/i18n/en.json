@@ -47,7 +47,12 @@
     "retry": "Retry",
     "reset": "Reset",
     "done": "Done & Close",
-    "detachedBadge": "Detached Window"
+    "detachedBadge": "Detached Window",
+    "tabAlreadyOpen": "Switched to already open tab",
+    "multiTabTitle": "Duplicate Tab Detected:",
+    "multiTabDesc": "SynoraDesk is currently open in another browser tab. To prevent session conflicts, please use the existing tab.",
+    "useThisTab": "Use this tab",
+    "dismiss": "Dismiss"
   },
   "nav": {
     "servers": "Servers",

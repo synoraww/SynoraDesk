@@ -32,9 +32,10 @@ interface WorkspaceState {
   tabs: WorkspaceTab[];
   activeTabId: string;
   editorOpenInNewTab: boolean;
+  duplicateHighlightTabId: string | null;
 
   // Actions
-  openTab: (tab: Omit<WorkspaceTab, 'id'> & { id?: string }) => string;
+  openTab: (tab: Omit<WorkspaceTab, 'id'> & { id?: string }, allowDuplicate?: boolean) => string;
   closeTab: (tabId: string) => void;
   setActiveTabId: (tabId: string) => void;
   updateTab: (tabId: string, updates: Partial<WorkspaceTab>) => void;
@@ -61,21 +62,74 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
     tabs: [initialTab],
     activeTabId: initialTab.id,
     editorOpenInNewTab: getInitialEditorPreference(),
+    duplicateHighlightTabId: null,
 
     setEditorOpenInNewTab: (enabled: boolean) => {
       localStorage.setItem('pterodesk_editor_open_new_tab', String(enabled));
       set({ editorOpenInNewTab: enabled });
     },
 
-    // Open a brand-new independent tab without hijacking any existing tab
-    openTab: (tabInput) => {
+    // Open tab with duplicate tab prevention mechanism (chống mở 2 tab trùng)
+    openTab: (tabInput, allowDuplicate = false) => {
       const state = get();
-      const id = tabInput.id || `tab-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const activePanel = usePanelStore.getState().activePanel;
+      const targetPanelId = tabInput.panelId || activePanel?.id;
+
+      // Duplicate check: if an identical tab is already open, focus it instead of duplicating!
+      if (!allowDuplicate) {
+        const existingTab = state.tabs.find((t) => {
+          // Case 1: Same server
+          if (tabInput.serverIdentifier && t.serverIdentifier) {
+            return (
+              t.serverIdentifier === tabInput.serverIdentifier &&
+              (t.panelId === targetPanelId || !t.panelId || !targetPanelId)
+            );
+          }
+
+          // Case 2: Same file editor
+          if (tabInput.filePath && t.filePath) {
+            return (
+              t.filePath === tabInput.filePath &&
+              t.serverIdentifier === tabInput.serverIdentifier
+            );
+          }
+
+          // Case 3: Same singleton view (dashboard, settings, nodes, databases, sftp, activities, apikeys)
+          if (
+            ['dashboard', 'settings', 'nodes', 'databases', 'sftp', 'activities', 'apikeys'].includes(tabInput.type)
+          ) {
+            return t.type === tabInput.type && (t.panelId === targetPanelId || !t.panelId || !targetPanelId);
+          }
+
+          return false;
+        });
+
+        if (existingTab) {
+          // Switch to already open tab
+          get().setActiveTabId(existingTab.id);
+
+          // Update subtab if provided
+          if (tabInput.serverSubTab && existingTab.serverSubTab !== tabInput.serverSubTab) {
+            get().updateTab(existingTab.id, { serverSubTab: tabInput.serverSubTab });
+          }
+
+          // Highlight the existing tab briefly
+          set({ duplicateHighlightTabId: existingTab.id });
+          setTimeout(() => {
+            if (get().duplicateHighlightTabId === existingTab.id) {
+              set({ duplicateHighlightTabId: null });
+            }
+          }, 1200);
+
+          return existingTab.id;
+        }
+      }
+
+      const id = tabInput.id || `tab-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
       const newTab: WorkspaceTab = {
         ...tabInput,
-        panelId: tabInput.panelId || activePanel?.id,
+        panelId: targetPanelId,
         id,
       };
 
@@ -166,6 +220,27 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
       const title = name || identifier;
       const currentActivePanel = usePanelStore.getState().activePanel;
 
+      // Duplicate prevention: check if this server is already open in ANY existing tab
+      const existingTab = get().tabs.find(
+        (t) =>
+          t.serverIdentifier === identifier &&
+          (t.panelId === currentActivePanel?.id || !t.panelId || !currentActivePanel?.id)
+      );
+
+      if (existingTab) {
+        get().setActiveTabId(existingTab.id);
+        if (subTab && existingTab.serverSubTab !== subTab) {
+          get().updateTab(existingTab.id, { serverSubTab: subTab });
+        }
+        set({ duplicateHighlightTabId: existingTab.id });
+        setTimeout(() => {
+          if (get().duplicateHighlightTabId === existingTab.id) {
+            set({ duplicateHighlightTabId: null });
+          }
+        }, 1200);
+        return existingTab.id;
+      }
+
       const tabData = {
         title,
         iconType: 'server' as const,
@@ -194,6 +269,25 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
       const fileName = filePath.split('/').pop() || filePath;
       const openInTab = inNewTab !== undefined ? inNewTab : get().editorOpenInNewTab;
       const currentActivePanel = usePanelStore.getState().activePanel;
+
+      // Duplicate prevention: check if this exact file is already open in another tab
+      const existingTab = get().tabs.find(
+        (t) =>
+          t.type === 'file-editor' &&
+          t.filePath === filePath &&
+          t.serverIdentifier === identifier
+      );
+
+      if (existingTab) {
+        get().setActiveTabId(existingTab.id);
+        set({ duplicateHighlightTabId: existingTab.id });
+        setTimeout(() => {
+          if (get().duplicateHighlightTabId === existingTab.id) {
+            set({ duplicateHighlightTabId: null });
+          }
+        }, 1200);
+        return existingTab.id;
+      }
 
       const tabData = {
         title: fileName,

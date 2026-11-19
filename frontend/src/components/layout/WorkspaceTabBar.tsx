@@ -17,7 +17,7 @@ import { OpenDetachedWindow } from '../../../wailsjs/go/main/App';
 import { main } from '../../../wailsjs/go/models';
 
 export const WorkspaceTabBar: React.FC = () => {
-  const { tabs, activeTabId, setActiveTabId, closeTab, openTab } = useWorkspaceStore();
+  const { tabs, activeTabId, setActiveTabId, closeTab, openTab, duplicateHighlightTabId } = useWorkspaceStore();
   const { t } = useI18n();
   const tabListRef = useRef<HTMLDivElement>(null);
 
@@ -111,12 +111,14 @@ export const WorkspaceTabBar: React.FC = () => {
       >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
+          const isHighlighted = tab.id === duplicateHighlightTabId;
 
           return (
             <div
               key={tab.id}
               onClick={() => setActiveTabId(tab.id)}
               className="wails-no-drag"
+              title={isHighlighted ? (t('common.tabAlreadyOpen') || 'Đã chuyển đến tab đang mở (tránh mở 2 tab trùng lặp)') : undefined}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -126,14 +128,15 @@ export const WorkspaceTabBar: React.FC = () => {
                 borderRadius: '8px 8px 0 0',
                 backgroundColor: isActive ? 'var(--color-surface)' : 'transparent',
                 color: isActive ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                borderTop: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
-                borderLeft: isActive ? '1px solid var(--color-border)' : '1px solid transparent',
-                borderRight: isActive ? '1px solid var(--color-border)' : '1px solid transparent',
+                borderTop: isHighlighted ? '2px solid #22C55E' : isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
+                borderLeft: isActive || isHighlighted ? '1px solid var(--color-border)' : '1px solid transparent',
+                borderRight: isActive || isHighlighted ? '1px solid var(--color-border)' : '1px solid transparent',
                 borderBottom: isActive ? '1px solid var(--color-surface)' : 'none',
+                boxShadow: isHighlighted ? '0 0 12px rgba(34, 197, 94, 0.6)' : 'none',
                 cursor: 'pointer',
                 fontSize: '12px',
                 fontWeight: isActive ? 600 : 500,
-                transition: 'background-color 0.12s ease',
+                transition: 'all 0.15s ease',
                 maxWidth: '220px',
                 minWidth: '110px',
                 position: 'relative',
