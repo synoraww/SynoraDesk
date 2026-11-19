@@ -1,4 +1,4 @@
-# 🦅 SynoraDesk (PteroDesk) v1.02A
+# 🦅 SynoraDesk (PteroDesk) v1.03A
 
 <p align="center">
   <strong>Native Windows Desktop Client for Pterodactyl Game & Server Panels</strong><br>
@@ -119,7 +119,7 @@ flowchart TD
 
 ### 🪟 3. Cửa Sổ Không Viền & Tách Cửa Sổ Phụ Độc Lập (Frameless & Detached Windows)
 - **Custom Frameless Titlebar**: Loại bỏ thanh tiêu đề mặc định thô cứng của Windows. Trang bị thanh tiêu đề kính mờ native (`wails-drag`), tích hợp:
-  - Logo ứng dụng & Huy hiệu phiên bản `v1.02A`.
+  - Logo ứng dụng & Huy hiệu phiên bản `v1.03A`.
   - Tên tab / máy chủ hiện tại.
   - Nút **Quick Lock** và nút **Kiểm tra cập nhật (Check for Updates)**.
   - Bộ 3 nút điều khiển (Thu nhỏ, Phóng to/Khôi phục, Đóng) với hiệu ứng hover màu đỏ chuẩn Windows Fluent UI.
@@ -222,7 +222,7 @@ Dự án đi kèm bộ tài liệu kỹ thuật hoàn chỉnh:
 - 📊 [**API Coverage Matrix**](API_COVERAGE.md) - Bảng theo dõi mức độ đáp ứng các endpoint API.
 - 🔄 [**Version Compatibility (1.x vs 2.x)**](API_COMPATIBILITY.md) - Quy chuẩn tương thích đa phiên bản panel.
 - 🧪 [**Testing & Mock Verification**](TESTING.md) - Hướng dẫn chạy unit tests và kiểm thử mock.
-- 📋 [**Project Status & Deliverables**](PROJECT_STATUS.md) - Ma trận nghiệm thu toàn bộ tính năng của phiên bản v1.02A.
+- 📋 [**Project Status & Deliverables**](PROJECT_STATUS.md) - Ma trận nghiệm thu toàn bộ tính năng của phiên bản v1.03A.
 - 📝 [**Changelog**](CHANGELOG.md) - Nhật ký lịch sử phát triển chi tiết qua từng phiên bản.
 
 ---

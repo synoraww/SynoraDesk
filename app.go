@@ -65,28 +65,25 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	// Determine app data directory
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		configDir = "."
-	}
-	a.appDataDir = filepath.Join(configDir, "PteroDesk")
+	// Determine fixed app data directory (persists across renames and releases)
+	a.appDataDir = GetFixedAppDataDir()
 
 	// Initialize logger
 	if err := logger.Init(a.appDataDir, false); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
 	}
-	logger.Logger.Info().Str("dataDir", a.appDataDir).Msg("PteroDesk starting up")
+	logger.Logger.Info().Str("dataDir", a.appDataDir).Msg("SynoraDesk starting up")
 
 	// Clean old logs
 	go logger.CleanOldLogs(a.appDataDir, 30)
 
 	// Initialize database
-	a.db, err = database.New(a.appDataDir)
+	db, err := database.New(a.appDataDir)
 	if err != nil {
 		logger.Logger.Fatal().Err(err).Msg("Failed to initialize database")
 		return
 	}
+	a.db = db
 	logger.Logger.Info().Msg("Database initialized")
 
 	// Initialize credential store
@@ -243,7 +240,7 @@ func (a *App) WipeAllData() error {
 
 // shutdown is called when the app is closing
 func (a *App) shutdown(ctx context.Context) {
-	logger.Logger.Info().Msg("PteroDesk shutting down")
+	logger.Logger.Info().Msg("SynoraDesk shutting down")
 	if a.lockoutManager != nil {
 		a.lockoutManager.Close()
 	}

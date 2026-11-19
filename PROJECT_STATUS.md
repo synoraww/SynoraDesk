@@ -1,6 +1,6 @@
 # SynoraDesk (PteroDesk) Project Status & Deliverables Matrix
 
-## Project Status: COMPLETED, VERIFIED & OPERATIONAL (v1.02A)
+## Project Status: COMPLETED, VERIFIED & OPERATIONAL (v1.03A)
 
 ### Summary
 SynoraDesk is a complete, production-grade native Windows desktop application for managing single or multiple Pterodactyl Panels via official REST APIs, direct Wings WebSockets, and native SSH/SFTP tunnels. Engineered with Go, Wails v2, React 19, and developed with AI assistance (Google DeepMind Antigravity / Gemini AI).

@@ -6,8 +6,8 @@ Security updates and vulnerability patches are actively maintained for the follo
 
 | Version | Status | Security Support | Recommended Action |
 | :--- | :--- | :--- | :--- |
-| **v1.02A** | **Current Stable** | ✅ **Active Full Support** | Recommended for all users |
-| **v1.0.x** | Deprecated | ⚠️ Critical Fixes Only | Upgrade to v1.02A or newer |
+| **v1.03A** | **Current Stable** | ✅ **Active Full Support** | Recommended for all users |
+| **v1.0.x - v1.02A** | Deprecated | ⚠️ Critical Fixes Only | Upgrade to v1.03A or newer |
 | **< v1.0.0** | Unsupported | ❌ End of Life (EOL) | Not supported |
 
 ---

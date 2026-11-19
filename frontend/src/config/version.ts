@@ -1,7 +1,7 @@
 // Application build and release metadata
 // Single source of truth for versioning across the Frontend
 export const APP_CONFIG = {
-  version: '1.02A',
+  version: '1.03A',
   name: 'SynoraDesk',
   repo: 'synoraww/SynoraDesk',
   githubUrl: 'https://github.com/synoraww/SynoraDesk',

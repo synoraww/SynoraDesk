@@ -378,7 +378,7 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div>Panel hiện tại: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.activePanelName}</strong></div>
                     <div>Trạng thái khóa: <strong style={{ color: diagnostics.securityLockout ? '#EF4444' : 'var(--color-success)' }}>{diagnostics.securityLockout ? 'Đang kích hoạt' : 'An toàn (Mở)'}</strong></div>
-                    <div>Thư mục dữ liệu: <strong style={{ color: 'var(--color-text)' }}>AppData/PteroDesk</strong></div>
+                    <div>Thư mục dữ liệu: <strong style={{ color: 'var(--color-text)' }}>AppData/SynoraDesk</strong></div>
                   </div>
                 </div>
               </div>

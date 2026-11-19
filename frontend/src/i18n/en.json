@@ -322,7 +322,7 @@
     "aboutTitle": "About PteroDesk",
     "aboutDesc": "Designed for professional server administrators and game host managers.",
     "applicationDirectory": "Application directory:",
-    "version": "PteroDesk v1.0.0 (Native Windows x64 Desktop Application)",
+    "version": "SynoraDesk v1.03A (Native Windows x64 Desktop Application)",
     "builtWith": "Built with Go + Wails v2 + React 19 + Meta Astryx Design System",
     "animationTitle": "Motion & Animations",
     "animationSubtitle": "Adjust between smooth animations or lightweight reduced motion",
@@ -1134,7 +1134,7 @@
     "upToDate": "You are running the latest version!",
     "currentVersion": "Current version",
     "newVersionAvailable": "A new version is available!",
-    "recentImprovements": "Key New Features (v1.02A)",
+    "recentImprovements": "Key New Features (v1.03A)",
     "checking": "Checking...",
     "checkAgain": "Check Again"
   },

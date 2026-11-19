@@ -55,23 +55,21 @@ func main() {
 		width = 1260
 		height = 800
 	} else {
-		// Load persisted window dimensions if available
-		configDir, _ := os.UserConfigDir()
-		if configDir != "" {
-			windowStatePath := filepath.Join(configDir, "PteroDesk", "data", "window_state.json")
-			if data, err := os.ReadFile(windowStatePath); err == nil {
-				var state struct {
-					Width       int  `json:"width"`
-					Height      int  `json:"height"`
-					X           int  `json:"x"`
-					Y           int  `json:"y"`
-					IsMaximised bool `json:"is_maximised"`
-				}
-				if err := json.Unmarshal(data, &state); err == nil {
-					if state.Width > 0 && state.Height > 0 {
-						width = state.Width
-						height = state.Height
-					}
+		// Load persisted window dimensions if available from fixed directory
+		fixedDataDir := GetFixedAppDataDir()
+		windowStatePath := filepath.Join(fixedDataDir, "data", "window_state.json")
+		if data, err := os.ReadFile(windowStatePath); err == nil {
+			var state struct {
+				Width       int  `json:"width"`
+				Height      int  `json:"height"`
+				X           int  `json:"x"`
+				Y           int  `json:"y"`
+				IsMaximised bool `json:"is_maximised"`
+			}
+			if err := json.Unmarshal(data, &state); err == nil {
+				if state.Width > 0 && state.Height > 0 {
+					width = state.Width
+					height = state.Height
 				}
 			}
 		}
@@ -89,6 +87,10 @@ func main() {
 			},
 		}
 	}
+
+	// Fixed WebView2 user data directory to prevent folder generation named after the exe
+	webviewDataPath := GetFixedWebviewUserDataPath()
+	go CleanLegacyExeFolders()
 
 	err := wails.Run(&options.App{
 		Title:              windowTitle,
@@ -115,7 +117,7 @@ func main() {
 			IsZoomControlEnabled:              true,
 			DisablePinchZoom:                  false,
 			ZoomFactor:                        1.0,
-			WebviewUserDataPath:               "",
+			WebviewUserDataPath:               webviewDataPath,
 			Theme:                             windows.Dark,
 		},
 	})

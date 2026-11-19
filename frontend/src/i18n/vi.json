@@ -502,7 +502,7 @@
     "localDataDesc": "Vị trí lưu SQLite WAL và thư mục kiểm tra tệp",
     "aboutTitle": "Thông tin SynoraDesk",
     "aboutDesc": "Chương trình quản lý máy chủ Pterodactyl thông API cực VUÝP.",
-    "version": "SynoraDesk 1.02A (Ứng dụng máy tính Windows x64)",
+    "version": "SynoraDesk 1.03A (Ứng dụng máy tính Windows x64)",
     "builtWith": "Xây dựng với Go + Wails v2 + React 19",
     "animationTitle": "Hiệu ứng chuyển động (Animation)",
     "animationSubtitle": "Tùy chỉnh độ mượt mà hoặc chế độ nhẹ nhàng để tiết kiệm tài nguyên",
@@ -1134,7 +1134,7 @@
     "upToDate": "Bạn đang sử dụng phiên bản mới nhất!",
     "currentVersion": "Phiên bản hiện tại",
     "newVersionAvailable": "Đã có bản cập nhật mới!",
-    "recentImprovements": "Tính năng mới nổi bật (v1.02A)",
+    "recentImprovements": "Tính năng mới nổi bật (v1.03A)",
     "checking": "Đang kiểm tra...",
     "checkAgain": "Kiểm tra lại"
   },
