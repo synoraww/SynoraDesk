@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
   Play,
@@ -540,11 +541,52 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     };
   }, [contextMenu.isOpen]);
 
+  const getZoomFactor = (): number => {
+    try {
+      const docZoom = (document.documentElement.style as any).zoom;
+      if (docZoom) {
+        const parsed = parseFloat(docZoom);
+        if (!isNaN(parsed) && parsed > 0) {
+          return parsed > 5 ? parsed / 100 : parsed;
+        }
+      }
+      const saved = localStorage.getItem('pterodesk_zoom_level');
+      if (saved) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed > 0) {
+          return parsed / 100;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return 1;
+  };
+
   const handleContextMenu = (e: React.MouseEvent, file: UnifiedFile) => {
     e.preventDefault();
     e.stopPropagation();
-    const x = Math.min(e.clientX, window.innerWidth - 210);
-    const y = Math.min(e.clientY, window.innerHeight - 320);
+
+    const zoom = getZoomFactor();
+    const clickX = e.clientX / zoom;
+    const clickY = e.clientY / zoom;
+
+    const viewportW = window.innerWidth / zoom;
+    const viewportH = window.innerHeight / zoom;
+
+    const menuW = 200;
+    const menuH = 340;
+
+    let x = clickX;
+    let y = clickY;
+
+    if (x + menuW > viewportW) {
+      x = Math.max(10, viewportW - menuW - 10);
+    }
+    if (y + menuH > viewportH) {
+      y = Math.max(10, viewportH - menuH - 10);
+    }
+
     setContextMenu({
       isOpen: true,
       x,
@@ -5268,7 +5310,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
       )}
 
       {/* Pterodactyl-Style File Context Menu */}
-      {contextMenu.isOpen && contextMenu.file && (
+      {contextMenu.isOpen && contextMenu.file && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -5574,7 +5616,8 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
             <Trash2 size={13} color="var(--color-error)" />
             <span>{t('common.delete')}</span>
           </button>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Confirmation Dialog for Allocation Unassign */}

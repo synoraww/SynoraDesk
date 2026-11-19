@@ -15,6 +15,8 @@ import {
   Activity,
   Server,
   Lock,
+  Monitor,
+  Layers,
 } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import { useUIStore } from '../../stores/uiStore';
@@ -22,9 +24,17 @@ import { APP_CONFIG } from '../../config/version';
 
 interface SystemDiagnostics {
   appVersion: string;
+  wailsVersion?: string;
   os: string;
+  osName?: string;
+  osDisplayVersion?: string;
+  osBuild?: string;
+  webView2Version?: string;
   arch: string;
+  cpuCores?: number;
+  hostname?: string;
   goVersion: string;
+  sqliteVersion?: string;
   appDataDir: string;
   databasePath: string;
   databaseSizeBytes: number;
@@ -92,19 +102,26 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
     if (!diagnostics) return;
 
     const report = [
-      `### SynoraDesk Diagnostic Report`,
+      `### SynoraDesk Diagnostic & Environment Report`,
       `- **Generated**: ${new Date().toISOString()}`,
       `- **App Version**: v${diagnostics.appVersion}`,
-      `- **OS / Platform**: ${diagnostics.os} (${diagnostics.arch})`,
-      `- **Go Runtime**: ${diagnostics.goVersion}`,
+      `- **Windows OS**: ${diagnostics.osName || diagnostics.os} ${diagnostics.osDisplayVersion ? `(${diagnostics.osDisplayVersion})` : ''}`,
+      `- **Windows Build**: ${diagnostics.osBuild || 'N/A'} (${diagnostics.arch}, ${diagnostics.cpuCores || 1} CPU cores)`,
+      `- **Hostname**: ${diagnostics.hostname || 'Localhost'}`,
+      `- **Edge WebView2 Runtime**: ${diagnostics.webView2Version || 'Installed'}`,
+      `- **Go Compiler**: ${diagnostics.goVersion}`,
+      `- **Wails Framework**: ${diagnostics.wailsVersion || 'v2.17.1'}`,
+      `- **SQLite Engine**: v${diagnostics.sqliteVersion || '3.x'} (${diagnostics.databaseWalMode ? 'WAL Mode Enabled' : 'Standard'})`,
+      ``,
+      `#### Memory & Concurrency`,
       `- **Goroutines**: ${diagnostics.goroutinesCount}`,
       `- **Allocated Heap**: ${diagnostics.allocatedMemMb.toFixed(2)} MB`,
       `- **Total Allocated**: ${diagnostics.totalAllocMemMb.toFixed(2)} MB`,
       ``,
       `#### Storage & Database`,
-      `- **SQLite WAL Mode**: ${diagnostics.databaseWalMode ? 'Enabled' : 'Disabled'}`,
       `- **DB File Size**: ${formatBytes(diagnostics.databaseSizeBytes)}`,
       `- **DB Path**: \`${diagnostics.databasePath}\``,
+      `- **App Data Directory**: \`${diagnostics.appDataDir}\``,
       `- **Panels Configured**: ${diagnostics.panelsCount}`,
       `- **Active Panel**: ${diagnostics.activePanelName}`,
       ``,
@@ -306,6 +323,46 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   gap: '12px',
                 }}
               >
+                {/* Windows System & Build Details */}
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-surface-hover)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '8px',
+                    padding: '12px 14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--color-text)', marginBottom: '6px' }}>
+                    <Monitor size={14} color="#38BDF8" /> Hệ điều hành Windows
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div>Phiên bản: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.osName || diagnostics.os.toUpperCase()} {diagnostics.osDisplayVersion ? `(${diagnostics.osDisplayVersion})` : ''}</strong></div>
+                    <div>Bản build: <strong style={{ color: 'var(--color-primary-light)' }}>{diagnostics.osBuild ? `Build ${diagnostics.osBuild}` : 'N/A'}</strong></div>
+                    <div>Kiến trúc & CPU: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.arch} ({diagnostics.cpuCores || 1} Luồng/Cores)</strong></div>
+                    <div>Tên máy: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.hostname || 'Localhost'}</strong></div>
+                  </div>
+                </div>
+
+                {/* Runtimes & Frameworks */}
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-surface-hover)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '8px',
+                    padding: '12px 14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--color-text)', marginBottom: '6px' }}>
+                    <Layers size={14} color="var(--color-warning)" /> Runtimes & Công nghệ
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div>Bản dựng app: <strong style={{ color: 'var(--color-primary-light)' }}>SynoraDesk v{diagnostics.appVersion}</strong></div>
+                    <div>Edge WebView2: <strong style={{ color: 'var(--color-text)' }}>v{diagnostics.webView2Version || 'Installed'}</strong></div>
+                    <div>Trình biên dịch: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.goVersion}</strong></div>
+                    <div>Framework Wails: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.wailsVersion || 'v2.17.1'}</strong></div>
+                  </div>
+                </div>
+
                 {/* SQLite WAL Storage */}
                 <div
                   style={{
@@ -319,28 +376,10 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                     <Database size={14} color="var(--color-primary-light)" /> SQLite WAL Engine
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div>Phiên bản SQLite: <strong style={{ color: 'var(--color-text)' }}>v{diagnostics.sqliteVersion || '3.x'}</strong></div>
                     <div>Dung lượng DB: <strong style={{ color: 'var(--color-text)' }}>{formatBytes(diagnostics.databaseSizeBytes)}</strong></div>
                     <div>Chế độ ghi: <strong style={{ color: 'var(--color-success)' }}>WAL (Write-Ahead-Log)</strong></div>
                     <div>Số Panel lưu trữ: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.panelsCount}</strong></div>
-                  </div>
-                </div>
-
-                {/* System & Go Runtime */}
-                <div
-                  style={{
-                    backgroundColor: 'var(--color-surface-hover)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '8px',
-                    padding: '12px 14px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--color-text)', marginBottom: '6px' }}>
-                    <Cpu size={14} color="var(--color-warning)" /> Runtime & Shell
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div>Hệ điều hành: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.os.toUpperCase()} ({diagnostics.arch})</strong></div>
-                    <div>Trình biên dịch: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.goVersion}</strong></div>
-                    <div>Bản dựng: <strong style={{ color: 'var(--color-primary-light)' }}>SynoraDesk v{diagnostics.appVersion}</strong></div>
                   </div>
                 </div>
 
@@ -373,7 +412,7 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--color-text)', marginBottom: '6px' }}>
-                    <Lock size={14} color={diagnostics.securityLockout ? '#EF4444' : 'var(--color-success)'} /> Khóa bảo vệ
+                    <Lock size={14} color={diagnostics.securityLockout ? '#EF4444' : 'var(--color-success)'} /> Khóa bảo vệ & Cấu hình
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div>Panel hiện tại: <strong style={{ color: 'var(--color-text)' }}>{diagnostics.activePanelName}</strong></div>

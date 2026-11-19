@@ -16,6 +16,16 @@ type DB struct {
 	path string
 }
 
+// GetSQLiteVersion queries and returns the underlying SQLite engine version
+func (d *DB) GetSQLiteVersion() (string, error) {
+	if d.conn == nil {
+		return "", fmt.Errorf("database connection is nil")
+	}
+	var version string
+	err := d.conn.QueryRow("SELECT sqlite_version()").Scan(&version)
+	return version, err
+}
+
 // PanelRecord represents a stored panel configuration
 type PanelRecord struct {
 	ID           string    `json:"id"`

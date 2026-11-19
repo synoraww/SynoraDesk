@@ -1877,9 +1877,17 @@ func (a *App) logActivity(panelID, panelName, serverID, action, result, errMsg s
 // SystemDiagnostics holds diagnostic info for tooling, configuration, and bug reporting
 type SystemDiagnostics struct {
 	AppVersion        string  `json:"appVersion"`
+	WailsVersion      string  `json:"wailsVersion"`
 	OS                string  `json:"os"`
+	OSName            string  `json:"osName"`
+	OSDisplayVersion  string  `json:"osDisplayVersion"`
+	OSBuild           string  `json:"osBuild"`
+	WebView2Version   string  `json:"webView2Version"`
 	Arch              string  `json:"arch"`
+	CPUCores          int     `json:"cpuCores"`
+	Hostname          string  `json:"hostname"`
 	GoVersion         string  `json:"goVersion"`
+	SQLiteVersion     string  `json:"sqliteVersion"`
 	AppDataDir        string  `json:"appDataDir"`
 	DatabasePath      string  `json:"databasePath"`
 	DatabaseSizeBytes int64   `json:"databaseSizeBytes"`
@@ -1938,11 +1946,30 @@ func (a *App) GetSystemDiagnostics() (*SystemDiagnostics, error) {
 		lockoutActive = status.IsLockedOut
 	}
 
+	osName, osDisplayVer, osBuild := getWindowsBuildDetails()
+	wv2Ver := getWebView2Version()
+	hostName, _ := os.Hostname()
+
+	sqliteVer := "3.x"
+	if a.db != nil {
+		if ver, err := a.db.GetSQLiteVersion(); err == nil && ver != "" {
+			sqliteVer = ver
+		}
+	}
+
 	return &SystemDiagnostics{
 		AppVersion:        AppVersion,
+		WailsVersion:      "v2.17.1",
 		OS:                goruntime.GOOS,
+		OSName:            osName,
+		OSDisplayVersion:  osDisplayVer,
+		OSBuild:           osBuild,
+		WebView2Version:   wv2Ver,
 		Arch:              goruntime.GOARCH,
+		CPUCores:          goruntime.NumCPU(),
+		Hostname:          hostName,
 		GoVersion:         goruntime.Version(),
+		SQLiteVersion:     sqliteVer,
 		AppDataDir:        a.appDataDir,
 		DatabasePath:      dbPath,
 		DatabaseSizeBytes: dbSize,

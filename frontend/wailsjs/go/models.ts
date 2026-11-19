@@ -1534,9 +1534,17 @@ export namespace main {
 	}
 	export class SystemDiagnostics {
 	    appVersion: string;
+	    wailsVersion: string;
 	    os: string;
+	    osName: string;
+	    osDisplayVersion: string;
+	    osBuild: string;
+	    webView2Version: string;
 	    arch: string;
+	    cpuCores: number;
+	    hostname: string;
 	    goVersion: string;
+	    sqliteVersion: string;
 	    appDataDir: string;
 	    databasePath: string;
 	    databaseSizeBytes: number;
@@ -1559,9 +1567,17 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.appVersion = source["appVersion"];
+	        this.wailsVersion = source["wailsVersion"];
 	        this.os = source["os"];
+	        this.osName = source["osName"];
+	        this.osDisplayVersion = source["osDisplayVersion"];
+	        this.osBuild = source["osBuild"];
+	        this.webView2Version = source["webView2Version"];
 	        this.arch = source["arch"];
+	        this.cpuCores = source["cpuCores"];
+	        this.hostname = source["hostname"];
 	        this.goVersion = source["goVersion"];
+	        this.sqliteVersion = source["sqliteVersion"];
 	        this.appDataDir = source["appDataDir"];
 	        this.databasePath = source["databasePath"];
 	        this.databaseSizeBytes = source["databaseSizeBytes"];
