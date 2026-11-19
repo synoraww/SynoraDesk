@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Native Windows Desktop Client for Pterodactyl Game & Server Panels</strong><br>
-  <em>Hiệu năng vượt trội • Bảo mật phần cứng Windows DPAPI • Trải nghiệm giao diện Glassmorphism đỉnh cao</em>
+  <em>Hiệu năng vượt trội • Bảo mật phần cứng Windows DPAPI </em>
 </p>
 
 <p align="center">
@@ -31,7 +31,7 @@
 
 Khác với các ứng dụng bọc nền web thông thường (Web Wrappers) hoặc các client Electron nặng nề ngốn hàng Gigabyte RAM và phản hồi chậm chạp:
 - **Siêu nhẹ & Tối ưu RAM**: Biên dịch thành **1 file nhị phân Go duy nhất** (`pterodesk.exe` ~35MB), chỉ tiêu thụ từ **60MB – 120MB RAM** trong quá trình vận hành nhờ engine WebView2 native.
-- **Giao tiếp trực tiếp & Tốc độ cao**: Tương tác trực tiếp qua REST API chính thức, bắt sóng dữ liệu WebSocket thời gian thực từ Wings Daemon, và mở hầm truyền file SFTP song song tốc độ cao.
+- **Giao tiếp trực tiếp & Tốc độ cao**: Tương tác trực tiếp qua REST API chính thức, bắt sóng dữ liệu WebSocket thời gian thực từ Wings Daemon.
 - **Bảo mật tuyệt đối**: Gắn chặt khóa API và thông tin nhạy cảm vào nhân bảo mật tài khoản Windows của người dùng thông qua `crypt32.dll`.
 
 ---
@@ -41,12 +41,10 @@ Khác với các ứng dụng bọc nền web thông thường (Web Wrappers) ho
 | Tiêu chí | Web Browser / Tab Panel | Electron Client cũ | 🦅 SynoraDesk (PteroDesk) |
 | :--- | :--- | :--- | :--- |
 | **Tiêu tốn bộ nhớ RAM** | 600MB - 1.5GB+ (mỗi tab) | 500MB - 1.2GB | **60MB - 120MB (siêu nhẹ)** |
-| **Bảo vệ Token / Mật khẩu** | Lưu Plaintext trong LocalStorage/Cookie | File cấu hình JSON không mã hóa | **Mã hóa phần cứng Windows DPAPI** |
+| **Bảo vệ Token / Mật khẩu** | Lưu trong LocalStorage/Cookie | File cấu hình JSON không mã hóa | **Mã hóa phần cứng Windows DPAPI** |
 | **Khóa an toàn khi rời máy** | Không có (ai mở máy cũng thấy) | Không có | **Khóa PIN/Mật khẩu + Monotonic Lockout** |
 | **Quản lý nhiều Panel** | Mở nhiều tab rời rạc, dễ lẫn lộn | Giới hạn hoặc cấu hình phức tạp | **Hub quản lý tập trung, tự lấy Favicon** |
-| **Truyền file SFTP** | Phải dùng app bên ngoài (FileZilla) | Hầu hết không có | **Tích hợp sẵn SFTP Client tốc độ cao** |
-| **Truy vấn Database** | Phải dùng phpMyAdmin / DBeaver | Phải cài thêm công cụ ngoài | **MySQL / MariaDB Client & Query tích hợp** |
-| **Soạn thảo code file server** | Textarea cơ bản | Ace Editor hạn chế | **Monaco Code Editor chuẩn VS Code** |
+| **Soạn thảo code file server** | Textarea cơ bản | Ace Editor hạn chế | **Monaco Code Editor** |
 | **Tùy biến thẩm mỹ** | Theo theme mặc định của web | Đóng khung, không đổi được | **Interactive Wallpaper Studio + 5 Theme màu** |
 | **Hệ thống cửa sổ** | Bị giới hạn trong trình duyệt | Cửa sổ cố định | **Frameless + Tách cửa sổ phụ độc lập** |
 
@@ -61,7 +59,7 @@ flowchart TD
     subgraph UI["Tầng Giao Diện (React 19 + TypeScript + Glassmorphism)"]
         TitleBar["Custom Frameless TitleBar (Min/Max/Close, Quick Lock, Updates)"]
         WSBar["Workspace Tab Bar (Lăn chuột mượt, triệt tiêu scrollbar)"]
-        Views["Dashboard | Servers | IDE Monaco | SFTP | Database | Settings"]
+        Views["Dashboard | Servers | IDE Monaco | Database | Settings"]
         ThemeEngine["Theme & Wallpaper Studio (Pan/Crop, 5 Palettes, Dim/Blur)"]
         LockScreen["App Lock Screen (PIN 4/6/8, Password, Shake Animation)"]
     end
@@ -74,7 +72,6 @@ flowchart TD
         PanelMgr["Panel Manager (Multi-profile, Live Health Ping, Favicon Fetcher)"]
         Discovery["API Discovery Engine (Tương thích Pterodactyl 1.x & 2.x)"]
         ConsoleWS["Wings WebSocket Client (Live Log Stream, Resource Telemetry)"]
-        SFTPClient["Direct SFTP Engine (pkg/sftp, File Upload/Download song song)"]
         DBClient["MySQL / MariaDB Engine (Query Execution, Schema Inspector)"]
         LockoutMgr["Monotonic Anti-Tamper Lockout (DPAPI + HMAC-SHA256)"]
         DPAPI["Windows DPAPI Hardware Vault (crypt32.dll CryptProtectData)"]
@@ -150,8 +147,6 @@ flowchart TD
   - Tích hợp nhân Monaco Editor (cùng engine với Visual Studio Code).
   - Đầy đủ tính năng: Highlight cú pháp (JSON, YAML, INI, Shell, Python, Java, JS/TS,...), tìm kiếm/thay thế, tự động thụt đầu dòng, phím tắt lưu file (`Ctrl + S`) tức thì.
 - **Bộ máy truyền file kép (Dual-Engine File Manager)**:
-  - Chuyển đổi linh hoạt giữa Pterodactyl REST File API và giao thức **SFTP trực tiếp (`pkg/sftp`)** tốc độ cao.
-  - Tự động điền thông số kết nối SFTP từ cấu hình node của server.
   - Duyệt thư mục, điều hướng breadcrumbs, tạo file/thư mục, tải file lên/xuống dung lượng lớn.
 - **MySQL / MariaDB Client tích hợp**: Quản lý database Pterodactyl, tự động tạo mới, xoay mật khẩu, duyệt cấu trúc bảng và thực thi truy vấn SQL trực tiếp.
 - **Quản lý Snapshot & Phân quyền Subusers**:
@@ -192,7 +187,6 @@ pterodesk/
 │   │   ├── dpapi_windows.go         # Mã hóa và giải mã phần cứng Windows CryptProtectData
 │   │   ├── credentials.go           # Quản lý và che mặt nạ chuỗi API Token
 │   │   └── lockout.go               # Cơ chế Monotonic Anti-Tamper Lockout & Tự hủy khẩn cấp
-│   └── sftp/                        # Bộ truyền file SFTP trực tiếp (pkg/sftp)
 │
 ├── frontend/                        # Tầng giao diện người dùng React 19 + TypeScript
 │   ├── src/
@@ -294,4 +288,4 @@ wails build -clean -s
 - **Mã nguồn mở & Công nghệ tri ân**:
   - Đội ngũ phát triển **[Pterodactyl](https://pterodactyl.io/)** vì nền tảng quản lý máy chủ game mã nguồn mở tuyệt vời.
   - Dự án **[Wails](https://wails.io/)** đã mang lại giải pháp desktop Go native siêu nhẹ, thay thế hoàn hảo cho Electron.
-  - **[Google DeepMind Antigravity / Gemini AI Agent](https://deepmind.google)** vì sự đồng hành, hỗ trợ thiết kế kiến trúc, lập trình và kiểm thử toàn diện cho hệ thống SynoraDesk.
+  - **[Google Antigravity](https://deepmind.google)** vì sự đồng hành, hỗ trợ thiết kế kiến trúc, lập trình và kiểm thử toàn diện cho hệ thống SynoraDesk.
