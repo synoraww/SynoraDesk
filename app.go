@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -54,6 +55,14 @@ type App struct {
 	appDataDir          string
 	detachedConfig      DetachedWindowConfig
 	lockoutManager      *security.LockoutManager
+
+	// In-memory Session Lock Guard
+	sessionMu         sync.RWMutex
+	lockConfigEnabled bool
+	sessionLocked     bool
+	lockConfigType    string
+	lockConfigHash    string
+	lockConfigSalt    string
 }
 
 // NewApp creates a new App instance
@@ -208,6 +217,36 @@ func (a *App) UpdateSecurityLockoutConfig(cfg security.LockoutConfig) error {
 	return a.lockoutManager.UpdateConfig(cfg)
 }
 
+// RestartApp finds os.Executable(), spawns a new process (with proper Windows flags so it starts independently),
+// and exits the current process with os.Exit(0) or wails runtime.Quit(a.ctx).
+func (a *App) RestartApp() error {
+	exe, err := os.Executable()
+	if err != nil {
+		logger.Logger.Error().Err(err).Msg("RestartApp: failed to find executable")
+		return fmt.Errorf("failed to find executable: %w", err)
+	}
+
+	cmd := exec.Command(exe)
+	setIndependentProcessFlags(cmd)
+
+	if err := cmd.Start(); err != nil {
+		logger.Logger.Error().Err(err).Msg("RestartApp: failed to launch new process")
+		return fmt.Errorf("failed to launch new process: %w", err)
+	}
+
+	logger.Logger.Info().Str("exe", exe).Msg("RestartApp: new process launched successfully, exiting current process")
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		if a.ctx != nil {
+			runtime.Quit(a.ctx)
+		}
+		os.Exit(0)
+	}()
+
+	return nil
+}
+
 // WipeAllData safely purges all sensitive credentials, database, and settings
 func (a *App) WipeAllData() error {
 	logger.Logger.Warn().Msg("SECURITY ALERT: Initiating complete data wipe due to maximum failed passcode attempts")
@@ -234,6 +273,86 @@ func (a *App) WipeAllData() error {
 
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "security:data-wiped")
+	}
+
+	// Launch goroutine that waits 400ms and calls RestartApp() so the app restarts
+	// cleanly with a fresh database and no 'database is closed' error.
+	go func() {
+		time.Sleep(400 * time.Millisecond)
+		_ = a.RestartApp()
+	}()
+
+	return nil
+}
+
+// --- In-Memory Session Lock Guard Bindings ---
+
+// SetLockConfig updates the session lock configuration
+func (a *App) SetLockConfig(enabled bool, lockType string, hash string, salt string) {
+	a.sessionMu.Lock()
+	defer a.sessionMu.Unlock()
+
+	a.lockConfigEnabled = enabled && hash != "" && lockType != "none" && lockType != ""
+	a.lockConfigType = lockType
+	a.lockConfigHash = hash
+	a.lockConfigSalt = salt
+	if !a.lockConfigEnabled {
+		a.sessionLocked = false
+	}
+}
+
+// LockSession locks the session if lock is enabled
+func (a *App) LockSession() {
+	a.sessionMu.Lock()
+	defer a.sessionMu.Unlock()
+	a.sessionLocked = true
+}
+
+// IsSessionLocked returns whether session lock is active and locked
+func (a *App) IsSessionLocked() bool {
+	a.sessionMu.RLock()
+	defer a.sessionMu.RUnlock()
+	return a.lockConfigEnabled && a.sessionLocked
+}
+
+// UnlockSession verifies the provided passcode hash against the configured hash
+func (a *App) UnlockSession(passcodeHash string) (bool, error) {
+	a.sessionMu.Lock()
+	defer a.sessionMu.Unlock()
+
+	// If lock is not enabled or not currently locked, return true
+	if !a.lockConfigEnabled || !a.sessionLocked {
+		return true, nil
+	}
+
+	// If lockout countdown is currently active, prevent unlocking
+	if a.lockoutManager != nil {
+		status := a.lockoutManager.GetStatus()
+		if status.IsLockedOut && status.RemainingLockoutSeconds > 0 {
+			return false, fmt.Errorf("app is locked out: %d seconds remaining", status.RemainingLockoutSeconds)
+		}
+	}
+
+	if subtle.ConstantTimeCompare([]byte(passcodeHash), []byte(a.lockConfigHash)) == 1 {
+		a.sessionLocked = false
+		if a.lockoutManager != nil {
+			_ = a.lockoutManager.RecordSuccess()
+		}
+		return true, nil
+	}
+
+	if a.lockoutManager != nil {
+		_, _ = a.lockoutManager.RecordFailedAttempt()
+	}
+	return false, fmt.Errorf("invalid passcode")
+}
+
+// checkSessionLock returns error if lock is enabled and session is locked
+func (a *App) checkSessionLock() error {
+	a.sessionMu.RLock()
+	defer a.sessionMu.RUnlock()
+	if a.lockConfigEnabled && a.sessionLocked {
+		return fmt.Errorf("app is locked: authentication required")
 	}
 	return nil
 }
@@ -269,16 +388,33 @@ func (a *App) shutdown(ctx context.Context) {
 
 // GetPanels returns all configured panels
 func (a *App) GetPanels() ([]panel.Panel, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	return a.panelManager.GetAllPanels()
 }
 
 // GetActivePanel returns the currently active panel
 func (a *App) GetActivePanel() (*panel.Panel, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	return a.panelManager.GetActivePanel()
+}
+
+// GetAccount returns the authenticated user account for the active panel (alias for GetCurrentAccount)
+func (a *App) GetAccount() (*api.Account, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	return a.GetCurrentAccount()
 }
 
 // GetCurrentAccount returns the authenticated user account for the active panel
 func (a *App) GetCurrentAccount() (*api.Account, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -288,6 +424,9 @@ func (a *App) GetCurrentAccount() (*api.Account, error) {
 
 // GetPanelAccount returns the authenticated user account for a specific panel
 func (a *App) GetPanelAccount(panelID string) (*api.Account, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPIForPanel(panelID)
 	if err != nil {
 		return nil, err
@@ -465,8 +604,19 @@ func (a *App) TestPanelConnection(id string) (*panel.ConnectionTestResult, error
 
 // --- Server Bindings ---
 
+// GetServers returns all servers from the active panel (alias for ListServers)
+func (a *App) GetServers() ([]api.Server, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	return a.ListServers()
+}
+
 // ListServers lists servers from the active panel's Client API
 func (a *App) ListServers() ([]api.Server, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -474,8 +624,19 @@ func (a *App) ListServers() ([]api.Server, error) {
 	return client.ListServers(a.ctx)
 }
 
+// GetServerDetails retrieves full details for a server (alias for GetServer)
+func (a *App) GetServerDetails(identifier string) (*api.Server, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	return a.GetServer(identifier)
+}
+
 // GetServer retrieves a specific server
 func (a *App) GetServer(identifier string) (*api.Server, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -504,6 +665,9 @@ func (a *App) GetServerResources(identifier string) (*api.ResourceUsage, error) 
 
 // SendPowerAction sends a power signal to a server
 func (a *App) SendPowerAction(identifier string, signal string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -520,6 +684,9 @@ func (a *App) SendPowerAction(identifier string, signal string) error {
 
 // GetDashboardStats retrieves dashboard statistics
 func (a *App) GetDashboardStats() (*panel.DashboardStats, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	stats := &panel.DashboardStats{}
 
 	panels, err := a.panelManager.GetAllPanels()
@@ -1303,6 +1470,9 @@ func (cl *consoleListener) OnError(err error) {
 
 // ConnectServerConsole starts live WebSocket log & resource streaming for a server
 func (a *App) ConnectServerConsole(serverID string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	a.wsMu.Lock()
 	defer a.wsMu.Unlock()
 
@@ -1849,6 +2019,7 @@ func (a *App) OpenDetachedWindow(config DetachedWindowConfig) error {
 	}
 
 	cmd := exec.Command(exe, args...)
+	setIndependentProcessFlags(cmd)
 	return cmd.Start()
 }
 

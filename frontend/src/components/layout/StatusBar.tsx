@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Wifi, WifiOff, CheckCircle2, ShieldCheck, Database as DbIcon, Server, Wrench } from 'lucide-react';
 import { usePanelStore } from '../../stores/panelStore';
 import { useServerStore } from '../../stores/serverStore';
+import { useSecurityStore } from '../../stores/securityStore';
 import { useI18n } from '../../i18n';
 import { SystemDiagnosticsModal } from '../common/SystemDiagnosticsModal';
 
 export const StatusBar: React.FC = () => {
   const { activePanel, panelPingMs } = usePanelStore();
   const { servers, dashboardStats } = useServerStore();
+  const isLocked = useSecurityStore((s) => s.isLocked);
   const { t } = useI18n();
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
 
@@ -61,7 +63,7 @@ export const StatusBar: React.FC = () => {
                   APP API
                 </span>
               )}
-              {panelPingMs !== null && (
+              {panelPingMs !== null && !isLocked && (
                 <span
                   title={`${t('ping.latency') || 'Độ trễ Panel'}: ${panelPingMs} ms`}
                   style={{

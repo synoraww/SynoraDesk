@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useSecurityStore } from './securityStore';
 
 // Types matching Go backend models
 export interface Panel {
@@ -110,6 +111,9 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   },
 
   checkPanelPing: async () => {
+    if (useSecurityStore.getState().isLocked) {
+      return null;
+    }
     try {
       // @ts-ignore
       const app = window.go?.main?.App;

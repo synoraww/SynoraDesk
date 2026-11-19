@@ -47,6 +47,8 @@ export const AppLockScreen: React.FC = () => {
     if (!isLocked) return;
 
     const handleKeyDown = async (e: KeyboardEvent) => {
+      if (isLockedOut) return;
+
       if (isPinMode) {
         if (/^[0-9]$/.test(e.key)) {
           e.preventDefault();
@@ -63,7 +65,7 @@ export const AppLockScreen: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLocked, enteredPin, targetLength, isPinMode]);
+  }, [isLocked, isLockedOut, enteredPin, targetLength, isPinMode]);
 
   const handleNumberClick = async (digit: string) => {
     if (isLockedOut || !isPinMode || enteredPin.length >= targetLength) return;
@@ -560,12 +562,16 @@ export const AppLockScreen: React.FC = () => {
 
         {/* Prompt Text */}
         <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)', marginBottom: '4px', textAlign: 'center' }}>
-          {isPinMode
+          {isLockedOut
+            ? (t('security.lockedOutInputBlocked') || 'Đang tạm dừng tiếp nhận thao tác')
+            : isPinMode
             ? (t('security.enterPinPrompt') || `Nhập mã PIN (${targetLength} chữ số)`)
             : (t('security.enterPasswordPrompt') || 'Nhập mật khẩu mở khóa')}
         </h2>
         <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '24px', textAlign: 'center' }}>
-          {t('security.unlockInstructions') || 'Nhập mã bảo mật để tiếp tục làm việc'}
+          {isLockedOut
+            ? (t('security.lockedOutInputBlockedDesc') || `Vui lòng đợi đồng hồ đếm ngược kết thúc (${formatLockoutTime(remainingLockoutSeconds)})`)
+            : (t('security.unlockInstructions') || 'Nhập mã bảo mật để tiếp tục làm việc')}
         </p>
 
         {/* PIN MODE: Dot Indicators + Virtual Keypad */}

@@ -16,6 +16,7 @@ import { WelcomeModal } from './components/common/WelcomeModal';
 import { MultiTabAlertBanner } from './components/common/MultiTabAlertBanner';
 import { APP_CONFIG } from './config/version';
 import { usePanelStore } from './stores/panelStore';
+import { useSecurityStore } from './stores/securityStore';
 import { useUIStore } from './stores/uiStore';
 import { useWorkspaceStore, WorkspaceTab } from './stores/workspaceStore';
 import { GetDetachedModeInfo, CloseCurrentWindow } from '../wailsjs/go/main/App';
@@ -153,6 +154,8 @@ export function App() {
     };
   }, []);
 
+  const isLocked = useSecurityStore((s) => s.isLocked);
+
   useEffect(() => {
     // Set theme and accent attributes
     document.documentElement.setAttribute('data-theme', theme);
@@ -161,7 +164,25 @@ export function App() {
     // Load custom background from backend
     loadCustomBackgroundFromBackend();
 
-    // Initial load from Go backend
+    // Listen for Wails events if runtime is available
+    // @ts-ignore
+    if (window.runtime?.EventsOn) {
+      // @ts-ignore
+      window.runtime.EventsOn('panel:switched', () => {
+        if (!useSecurityStore.getState().isLocked) {
+          fetchActivePanel();
+        }
+      });
+    }
+  }, []);
+
+  // Intercept initial data fetching: check useSecurityStore.getState().isLocked
+  // Once isLocked becomes false, trigger fetchPanels() and start normal pinging
+  useEffect(() => {
+    if (isLocked) {
+      return;
+    }
+
     fetchPanels();
     fetchActivePanel().then(() => {
       const panel = usePanelStore.getState().activePanel;
@@ -173,15 +194,17 @@ export function App() {
       }
     });
 
-    // Listen for Wails events if runtime is available
-    // @ts-ignore
-    if (window.runtime?.EventsOn) {
-      // @ts-ignore
-      window.runtime.EventsOn('panel:switched', () => {
-        fetchActivePanel();
-      });
-    }
-  }, []);
+    // Start normal periodic ping loop while unlocked
+    const pingInterval = setInterval(() => {
+      if (!useSecurityStore.getState().isLocked) {
+        usePanelStore.getState().checkPanelPing();
+      }
+    }, 30000);
+
+    return () => {
+      clearInterval(pingInterval);
+    };
+  }, [isLocked]);
 
   // Map active tab type to Sidebar NavItemKey
   const getSidebarKey = (tab: WorkspaceTab): NavItemKey => {

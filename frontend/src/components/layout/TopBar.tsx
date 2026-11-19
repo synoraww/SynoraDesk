@@ -14,6 +14,7 @@ import {
 import { useUIStore } from '../../stores/uiStore';
 import { usePanelStore } from '../../stores/panelStore';
 import { useServerStore } from '../../stores/serverStore';
+import { useSecurityStore } from '../../stores/securityStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useI18n } from '../../i18n';
 import { PanelFavicon } from '../common/PanelFavicon';
@@ -26,6 +27,7 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab }) => {
   const { theme, toggleTheme } = useUIStore();
   const { panels, activePanel, currentAccount, panelAccounts, switchPanel, panelPingMs, checkPanelPing } = usePanelStore();
+  const isLocked = useSecurityStore((s) => s.isLocked);
   const { activeTabId, updateTab } = useWorkspaceStore();
   const { fetchServers, fetchDashboardStats } = useServerStore();
   const { t } = useI18n();
@@ -34,6 +36,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab 
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = async () => {
+    if (isLocked) return;
     setRefreshing(true);
     try {
       await Promise.all([fetchServers(), fetchDashboardStats(), checkPanelPing()]);
@@ -253,7 +256,10 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab 
         {activePanel && (
           <button
             type="button"
-            onClick={() => checkPanelPing()}
+            disabled={isLocked}
+            onClick={() => {
+              if (!isLocked) checkPanelPing();
+            }}
             title={panelPingMs !== null ? `${t('ping.latency') || 'Độ trễ Panel'}: ${panelPingMs} ms (Click để kiểm tra lại)` : (t('ping.checking') || 'Đang kiểm tra kết nối...')}
             className="btn-interactive"
             style={{

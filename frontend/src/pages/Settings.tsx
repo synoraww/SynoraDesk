@@ -14,6 +14,7 @@ import {
   Image as ImageIcon,
   FolderOpen,
   Trash2,
+  AlertTriangle,
   Sliders,
   Sparkles,
   Zap,
@@ -79,6 +80,9 @@ export const SettingsPage: React.FC = () => {
   const [isWallpaperModalOpen, setIsWallpaperModalOpen] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
+  const [showWipeConfirm, setShowWipeConfirm] = useState(false);
+  const [isWiping, setIsWiping] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
 
   useEffect(() => {
     // @ts-ignore
@@ -86,7 +90,33 @@ export const SettingsPage: React.FC = () => {
     if (app) {
       app.GetAppDataDir().then((dir: string) => setDataDir(dir || ''));
     }
+
+    // @ts-ignore
+    if (window.runtime?.EventsOn) {
+      // @ts-ignore
+      window.runtime.EventsOn('security:data-wiped', () => {
+        setIsRestarting(true);
+      });
+    }
   }, []);
+
+  const handleWipeData = async () => {
+    setIsWiping(true);
+    try {
+      // @ts-ignore
+      const app = window.go?.main?.App;
+      if (app?.WipeAllData) {
+        await app.WipeAllData();
+      }
+      localStorage.clear();
+      setIsRestarting(true);
+      setShowWipeConfirm(false);
+    } catch (e) {
+      console.error('Failed to wipe data:', e);
+      setIsWiping(false);
+      setShowWipeConfirm(false);
+    }
+  };
 
   const handleOpenBackgroundFolder = () => {
     // @ts-ignore
@@ -811,6 +841,38 @@ export const SettingsPage: React.FC = () => {
               {dataDir}
             </div>
           </div>
+
+          <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-error, #EF4444)' }}>
+                {t('welcome.resetDataBtn') || 'Xóa sạch toàn bộ dữ liệu'}
+              </span>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '2px 0 0 0' }}>
+                Xóa sạch cơ sở dữ liệu SQLite, thông tin tài khoản và tự động khởi động lại ứng dụng
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowWipeConfirm(true)}
+              className="btn-interactive"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#EF4444',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={13} />
+              <span>{t('welcome.resetDataBtn') || 'Xóa toàn bộ'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Security & App Lock Card */}
@@ -899,6 +961,122 @@ export const SettingsPage: React.FC = () => {
           onClose={() => setIsWelcomeModalOpen(false)}
           canDismissWithoutAccept={true}
         />
+
+        {/* Confirmation Modal for Wiping Data */}
+        {showWipeConfirm && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1000000,
+              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+            }}
+          >
+            <div
+              className="anim-modal-in"
+              style={{
+                width: '100%',
+                maxWidth: '440px',
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '12px',
+                padding: '20px',
+                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.7)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                <AlertTriangle size={24} color="#EF4444" />
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#EF4444', margin: 0 }}>
+                  {t('welcome.resetConfirmTitle') || 'Xác nhận xóa sạch toàn bộ dữ liệu'}
+                </h3>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+                {t('welcome.resetConfirmDesc') ||
+                  'Thao tác này sẽ xóa sạch toàn bộ cấu hình, Panels, cơ sở dữ liệu SQLite và khóa mã hóa trên máy tính này. Ứng dụng sẽ tự động khởi động lại. Bạn có chắc chắn không?'}
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowWipeConfirm(false)}
+                  disabled={isWiping}
+                  className="btn-interactive"
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    backgroundColor: 'var(--color-surface-hover)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t('common.cancel') || 'Hủy'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleWipeData}
+                  disabled={isWiping}
+                  className="btn-interactive"
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    backgroundColor: '#EF4444',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isWiping ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isWiping ? (t('common.processing') || 'Đang xóa...') : (t('welcome.resetDataBtn') || 'Xóa toàn bộ')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Restarting Overlay */}
+        {isRestarting && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1000002,
+              backgroundColor: 'rgba(9, 13, 22, 0.96)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '16px',
+              color: '#FFFFFF',
+              textAlign: 'center',
+              padding: '24px',
+            }}
+          >
+            <div
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                border: '3px solid rgba(255, 255, 255, 0.15)',
+                borderTopColor: '#3B82F6',
+                animation: 'spin 1s linear infinite',
+              }}
+            />
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#FFFFFF' }}>
+              Đang khởi động lại ứng dụng...
+            </h2>
+            <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.7)', margin: 0, maxWidth: '400px', lineHeight: 1.5 }}>
+              Toàn bộ dữ liệu đã được xóa an toàn. Ứng dụng đang tự khởi động lại với cấu hình mặc định.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

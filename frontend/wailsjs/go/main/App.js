@@ -158,6 +158,10 @@ export function GetAPIRegistry() {
   return window['go']['main']['App']['GetAPIRegistry']();
 }
 
+export function GetAccount() {
+  return window['go']['main']['App']['GetAccount']();
+}
+
 export function GetAccountActivity() {
   return window['go']['main']['App']['GetAccountActivity']();
 }
@@ -238,12 +242,20 @@ export function GetServer(arg1) {
   return window['go']['main']['App']['GetServer'](arg1);
 }
 
+export function GetServerDetails(arg1) {
+  return window['go']['main']['App']['GetServerDetails'](arg1);
+}
+
 export function GetServerResources(arg1) {
   return window['go']['main']['App']['GetServerResources'](arg1);
 }
 
 export function GetServerStartup(arg1) {
   return window['go']['main']['App']['GetServerStartup'](arg1);
+}
+
+export function GetServers() {
+  return window['go']['main']['App']['GetServers']();
 }
 
 export function GetSystemDiagnostics() {
@@ -260,6 +272,10 @@ export function GetWindowState() {
 
 export function IsServerSFTPConnected(arg1) {
   return window['go']['main']['App']['IsServerSFTPConnected'](arg1);
+}
+
+export function IsSessionLocked() {
+  return window['go']['main']['App']['IsSessionLocked']();
 }
 
 export function ListAccountAPIKeys() {
@@ -326,6 +342,10 @@ export function ListSubusers(arg1) {
   return window['go']['main']['App']['ListSubusers'](arg1);
 }
 
+export function LockSession() {
+  return window['go']['main']['App']['LockSession']();
+}
+
 export function OpenBackgroundFolder() {
   return window['go']['main']['App']['OpenBackgroundFolder']();
 }
@@ -382,6 +402,10 @@ export function RenameServerSFTPFile(arg1, arg2, arg3) {
   return window['go']['main']['App']['RenameServerSFTPFile'](arg1, arg2, arg3);
 }
 
+export function RestartApp() {
+  return window['go']['main']['App']['RestartApp']();
+}
+
 export function RestoreBackup(arg1, arg2, arg3) {
   return window['go']['main']['App']['RestoreBackup'](arg1, arg2, arg3);
 }
@@ -410,6 +434,10 @@ export function SendServerPowerWS(arg1) {
   return window['go']['main']['App']['SendServerPowerWS'](arg1);
 }
 
+export function SetLockConfig(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SetLockConfig'](arg1, arg2, arg3, arg4);
+}
+
 export function SetServerAllocationNote(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetServerAllocationNote'](arg1, arg2, arg3);
 }
@@ -436,6 +464,10 @@ export function TriggerSchedule(arg1, arg2) {
 
 export function UnassignServerAllocation(arg1, arg2) {
   return window['go']['main']['App']['UnassignServerAllocation'](arg1, arg2);
+}
+
+export function UnlockSession(arg1) {
+  return window['go']['main']['App']['UnlockSession'](arg1);
 }
 
 export function UpdateAccountEmail(arg1, arg2) {

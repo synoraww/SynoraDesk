@@ -59,6 +59,17 @@ type LockoutManager struct {
 	stopTicker     chan struct{}
 }
 
+// DefaultLockoutConfig returns the default configuration where auto-wipe is explicitly disabled
+func DefaultLockoutConfig() LockoutConfig {
+	return LockoutConfig{
+		EnableLockout:          true,
+		MaxAttempts:            5,
+		LockoutDurationMinutes: 15,
+		EnableAutoWipe:         false, // Explicitly false by default: only timed lockout is triggered
+		WipeAttempts:           10,
+	}
+}
+
 // NewLockoutManager initializes the lockout manager
 func NewLockoutManager(dataDir string, creds *CredentialStore, onWipeCallback func()) *LockoutManager {
 	filePath := filepath.Join(dataDir, "security_lockout.dat")
@@ -68,13 +79,7 @@ func NewLockoutManager(dataDir string, creds *CredentialStore, onWipeCallback fu
 		onWipeCallback: onWipeCallback,
 		stopTicker:     make(chan struct{}),
 		state: LockoutState{
-			Config: LockoutConfig{
-				EnableLockout:          true,
-				MaxAttempts:            5,
-				LockoutDurationMinutes: 15,
-				EnableAutoWipe:         false,
-				WipeAttempts:           10,
-			},
+			Config: DefaultLockoutConfig(),
 		},
 	}
 

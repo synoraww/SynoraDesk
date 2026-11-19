@@ -31,8 +31,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
   const [agreed, setAgreed] = useState(false);
   const [showWipeConfirm, setShowWipeConfirm] = useState(false);
   const [wiping, setWiping] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
 
-  if (!isOpen) return null;
+  if (!isOpen && !isRestarting) return null;
 
   const handleAcceptAndStart = () => {
     if (!agreed && !canDismissWithoutAccept) return;
@@ -51,7 +52,8 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
         await app.WipeAllData();
       }
       localStorage.clear();
-      window.location.reload();
+      setIsRestarting(true);
+      setShowWipeConfirm(false);
     } catch (e) {
       console.error('Failed to wipe data:', e);
       setWiping(false);
@@ -490,6 +492,44 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Restarting Overlay */}
+      {isRestarting && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000002,
+            backgroundColor: 'rgba(9, 13, 22, 0.96)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '16px',
+            color: '#FFFFFF',
+            textAlign: 'center',
+            padding: '24px',
+          }}
+        >
+          <div
+            style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: '3px solid rgba(255, 255, 255, 0.15)',
+              borderTopColor: '#3B82F6',
+              animation: 'spin 1s linear infinite',
+            }}
+          />
+          <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#FFFFFF' }}>
+            Đang khởi động lại ứng dụng...
+          </h2>
+          <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.7)', margin: 0, maxWidth: '400px', lineHeight: 1.5 }}>
+            Toàn bộ dữ liệu đã được xóa an toàn. Ứng dụng đang tự khởi động lại với cấu hình mặc định.
+          </p>
         </div>
       )}
     </div>,

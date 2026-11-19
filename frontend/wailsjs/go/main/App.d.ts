@@ -87,6 +87,8 @@ export function ExecuteSQL(arg1:string):Promise<dbclient.QueryResult>;
 
 export function GetAPIRegistry():Promise<discovery.Registry>;
 
+export function GetAccount():Promise<api.Account>;
+
 export function GetAccountActivity():Promise<Array<api.AccountActivity>>;
 
 export function GetActivePanel():Promise<panel.Panel>;
@@ -127,9 +129,13 @@ export function GetSecurityLockoutStatus():Promise<security.LockoutStatus>;
 
 export function GetServer(arg1:string):Promise<api.Server>;
 
+export function GetServerDetails(arg1:string):Promise<api.Server>;
+
 export function GetServerResources(arg1:string):Promise<api.ResourceUsage>;
 
 export function GetServerStartup(arg1:string):Promise<api.ServerStartupConfig>;
+
+export function GetServers():Promise<Array<api.Server>>;
 
 export function GetSystemDiagnostics():Promise<main.SystemDiagnostics>;
 
@@ -138,6 +144,8 @@ export function GetTwoFactorDetails():Promise<api.TwoFactorDetails>;
 export function GetWindowState():Promise<main.WindowState>;
 
 export function IsServerSFTPConnected(arg1:string):Promise<boolean>;
+
+export function IsSessionLocked():Promise<boolean>;
 
 export function ListAccountAPIKeys():Promise<Array<api.AccountApiKey>>;
 
@@ -171,6 +179,8 @@ export function ListServers():Promise<Array<api.Server>>;
 
 export function ListSubusers(arg1:string):Promise<Array<api.Subuser>>;
 
+export function LockSession():Promise<void>;
+
 export function OpenBackgroundFolder():Promise<void>;
 
 export function OpenDetachedWindow(arg1:main.DetachedWindowConfig):Promise<void>;
@@ -199,6 +209,8 @@ export function RenameServer(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function RenameServerSFTPFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function RestartApp():Promise<void>;
+
 export function RestoreBackup(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function SaveCustomBackgroundSettings(arg1:number,arg2:number,arg3:number,arg4:number,arg5:number,arg6:string):Promise<void>;
@@ -213,6 +225,8 @@ export function SendServerCommand(arg1:string):Promise<void>;
 
 export function SendServerPowerWS(arg1:string):Promise<void>;
 
+export function SetLockConfig(arg1:boolean,arg2:string,arg3:string,arg4:string):Promise<void>;
+
 export function SetServerAllocationNote(arg1:string,arg2:number,arg3:string):Promise<api.Allocation>;
 
 export function SetServerPrimaryAllocation(arg1:string,arg2:number):Promise<void>;
@@ -226,6 +240,8 @@ export function ToggleBackupLock(arg1:string,arg2:string):Promise<api.Backup>;
 export function TriggerSchedule(arg1:string,arg2:number):Promise<void>;
 
 export function UnassignServerAllocation(arg1:string,arg2:number):Promise<void>;
+
+export function UnlockSession(arg1:string):Promise<boolean>;
 
 export function UpdateAccountEmail(arg1:string,arg2:string):Promise<void>;
 

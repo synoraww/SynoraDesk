@@ -68,13 +68,18 @@ function generateRandomSalt(): string {
 let idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let lockoutCountdownInterval: ReturnType<typeof setInterval> | null = null;
 
+const savedLockType = (localStorage.getItem('pterodesk_lock_type') as LockType) || 'none';
+const savedPasscodeHash = localStorage.getItem('pterodesk_passcode_hash') || '';
+const savedLockOnLaunch = localStorage.getItem('pterodesk_lock_on_launch') === 'true';
+const isInitialLocked = savedLockType !== 'none' && Boolean(savedPasscodeHash) && savedLockOnLaunch;
+
 export const useSecurityStore = create<SecurityState>((set, get) => ({
-  isLocked: false,
-  lockType: (localStorage.getItem('pterodesk_lock_type') as LockType) || 'none',
-  passcodeHash: localStorage.getItem('pterodesk_passcode_hash') || '',
+  isLocked: isInitialLocked,
+  lockType: savedLockType,
+  passcodeHash: savedPasscodeHash,
   salt: localStorage.getItem('pterodesk_salt') || '',
   autoLockMinutes: parseInt(localStorage.getItem('pterodesk_autolock_minutes') || '0', 10),
-  lockOnLaunch: localStorage.getItem('pterodesk_lock_on_launch') === 'true',
+  lockOnLaunch: savedLockOnLaunch,
   encryptDatabase: localStorage.getItem('pterodesk_encrypt_db') === 'true',
   failedAttempts: 0,
 
@@ -88,14 +93,31 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   isDataWiped: false,
 
   initSecurity: async () => {
-    const { lockType, lockOnLaunch, passcodeHash } = get();
+    const { lockType, lockOnLaunch, passcodeHash, salt } = get();
+
+    // Sync current lock config to backend
+    try {
+      // @ts-ignore
+      const app = window.go?.main?.App;
+      if (app?.SetLockConfig) {
+        await app.SetLockConfig(
+          lockType !== 'none',
+          lockType,
+          passcodeHash,
+          salt
+        );
+      }
+    } catch {
+      // Backend not ready yet
+    }
 
     // 1. Check tamper-proof lockout status from backend DPAPI storage
     try {
       const status = await GetSecurityLockoutStatus();
       if (status) {
+        const isLockedOutNow = status.is_locked_out && status.remaining_lockout_seconds > 0;
         set({
-          isLockedOut: status.is_locked_out && status.remaining_lockout_seconds > 0,
+          isLockedOut: isLockedOutNow,
           remainingLockoutSeconds: status.remaining_lockout_seconds || 0,
           failedAttempts: status.failed_attempts || 0,
           enableLockout: status.enable_lockout ?? true,
@@ -105,7 +127,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
           wipeAttempts: status.wipe_attempts || 10,
         });
 
-        if (status.is_locked_out && status.remaining_lockout_seconds > 0) {
+        if (isLockedOutNow) {
           set({ isLocked: true });
         }
       }
@@ -127,9 +149,16 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       }
     }, 1000);
 
-    // If lock is enabled and lockOnLaunch is true, lock immediately on startup
-    if (lockType !== 'none' && passcodeHash && (lockOnLaunch || get().isLockedOut)) {
+    // If lock is enabled and lockOnLaunch is true (or locked out), lock immediately on startup
+    if (lockType !== 'none' && passcodeHash && (lockOnLaunch || get().isLockedOut || get().isLocked)) {
       set({ isLocked: true });
+      try {
+        // @ts-ignore
+        const app = window.go?.main?.App;
+        if (app?.LockSession) {
+          await app.LockSession();
+        }
+      } catch {}
     }
 
     // Setup global idle activity listener
@@ -175,7 +204,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     const ms = autoLockMinutes * 60 * 1000;
     idleTimeoutId = setTimeout(() => {
       if (get().lockType !== 'none' && !get().isLocked) {
-        set({ isLocked: true });
+        get().lockApp();
       }
     }, ms);
   },
@@ -184,6 +213,13 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     const { lockType, passcodeHash } = get();
     if (lockType !== 'none' && passcodeHash) {
       set({ isLocked: true });
+      try {
+        // @ts-ignore
+        const app = window.go?.main?.App;
+        if (app?.LockSession) {
+          app.LockSession();
+        }
+      } catch {}
     }
   },
 
@@ -193,6 +229,16 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       localStorage.removeItem('pterodesk_passcode_hash');
       localStorage.removeItem('pterodesk_salt');
       set({ lockType: 'none', passcodeHash: '', salt: '', isLocked: false });
+      try {
+        // @ts-ignore
+        const app = window.go?.main?.App;
+        if (app?.SetLockConfig) {
+          await app.SetLockConfig(false, 'none', '', '');
+        }
+        if (app?.UnlockSession) {
+          await app.UnlockSession('');
+        }
+      } catch {}
       return true;
     }
 
@@ -214,6 +260,14 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     });
 
     try {
+      // @ts-ignore
+      const app = window.go?.main?.App;
+      if (app?.SetLockConfig) {
+        await app.SetLockConfig(true, type, hash, salt);
+      }
+      if (app?.UnlockSession) {
+        await app.UnlockSession(hash);
+      }
       await RecordSuccessfulPasscodeAttempt();
     } catch {}
 
@@ -229,12 +283,24 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
 
     if (!salt || !passcodeHash) {
       set({ isLocked: false });
+      try {
+        // @ts-ignore
+        const app = window.go?.main?.App;
+        if (app?.UnlockSession) {
+          await app.UnlockSession('');
+        }
+      } catch {}
       return true;
     }
 
     const hash = await sha256(passcode, salt);
     if (hash === passcodeHash) {
       try {
+        // @ts-ignore
+        const app = window.go?.main?.App;
+        if (app?.UnlockSession) {
+          await app.UnlockSession(hash);
+        }
         await RecordSuccessfulPasscodeAttempt();
       } catch {}
       set({
@@ -285,6 +351,16 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         isLockedOut: false,
         remainingLockoutSeconds: 0,
       });
+      try {
+        // @ts-ignore
+        const app = window.go?.main?.App;
+        if (app?.SetLockConfig) {
+          await app.SetLockConfig(false, 'none', '', '');
+        }
+        if (app?.UnlockSession) {
+          await app.UnlockSession('');
+        }
+      } catch {}
       return true;
     }
     return false;
