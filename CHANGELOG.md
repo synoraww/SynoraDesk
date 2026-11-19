@@ -1,6 +1,44 @@
 # Changelog
 
-All notable changes to the PteroDesk project will be documented in this file.
+All notable changes to the SynoraDesk (PteroDesk) project will be documented in this file.
+
+## [1.0.2A] - 2026-11-19
+
+### Major Update: Passcode Security, Wallpaper Studio, Frameless Controls & AI-Assisted Architecture
+
+#### Added
+- **AI-Assisted Engineering**:
+  - Full codebase enhancement, refactoring, and verification assisted by Google DeepMind Antigravity / Gemini AI.
+- **Passcode Security & Anti-Brute-Force Lockout (`internal/security/lockout.go`)**:
+  - PIN lock (4, 6, 8 digits) and text password protection for the application.
+  - Hardware-bound monotonic anti-tamper lockout mechanism: penalty countdown survives machine reboot without decrementing offline time.
+  - Encrypted state storage (`security_lockout.dat`) using Windows DPAPI (`CryptProtectData`) plus HMAC-SHA256 signature verification.
+  - Emergency self-destruct auto-wipe (`WipeAllData`): automatically cleanses the SQLite database and all saved credentials upon exceeding maximum failed attempts.
+- **Advanced Interactive Wallpaper Studio (`WallpaperCustomizerModal.tsx`)**:
+  - Direct mouse-drag panning & cropping to select specific focal sections of any wallpaper image.
+  - Smooth Zoom controls (50% to 350%) with zoom slider, +/- buttons, and quick zoom presets (100%, 125%, 150%, 200%, 250%).
+  - 9-Point quick alignment grid (Top-Left, Center, Bottom-Right, etc.) with X/Y coordinate sliders.
+  - Rule-of-thirds composition overlay with live focal crosshairs.
+  - Cover and Contain display modes, with real-time live sync for blur and dimming overlays.
+- **Frameless Window Management & Window State Persistence**:
+  - Custom frameless title bar with native dragging (`wails-drag` / `--wails-draggable: drag`).
+  - Seamless window controls: Minimize (`WindowMinimise`), Maximize/Restore (`WindowToggleMaximise`), and Quit (`Quit`).
+  - Window state auto-save: debounced persistence of window position (X, Y), dimensions (Width, Height), and maximized state (`window_state.json`).
+  - Window mobility while locked: ability to move and adjust the window seamlessly from the lock screen.
+- **Detached Pop-Out Windows (Cửa sổ phụ độc lập)**:
+  - Ability to pop out server consoles, Monaco IDE editor tabs, SFTP explorer, and databases into independent desktop windows.
+  - Dedicated custom draggable header with independent minimize, maximize, and close controls for detached windows.
+- **Global Browser Zoom Hotkeys**:
+  - Full support for `Ctrl +`, `Ctrl -`, `Ctrl 0`, and `Ctrl + Wheel` zooming.
+  - Applied directly to `document.documentElement.style.zoom`, preventing layout distortion and black border artifacts.
+  - Floating HUD zoom badge with local persistence in `localStorage`.
+- **UI/UX & Localization**:
+  - Auto-detection of panel favicons (`/public/favicons/favicon.ico`).
+  - Smart terminal with enhanced ANSI color code parsing.
+  - 2FA QR code display resolution in account security settings.
+  - Comprehensive bilingual internationalization (Vietnamese and English).
+
+---
 
 ## [1.0.0] - 2026-11-16
 
@@ -47,10 +85,4 @@ All notable changes to the PteroDesk project will be documented in this file.
   - Subuser access management: list subusers, invite users with granular permission checkboxes, and revoke access.
 
 - **Documentation Suite**:
-  - `API_DISCOVERY.md`: Full endpoint catalog and protocol research.
-  - `API_COVERAGE.md`: Explicit status checklist for every endpoint.
-  - `API_COMPATIBILITY.md`: Version compatibility rules (1.x vs 2.x).
-  - `ARCHITECTURE.md`: Subsystem overview and concurrency architecture.
-  - `SECURITY.md`: DPAPI, in-memory masking, and network safety specifications.
-  - `TESTING.md`: Mock tests and verification documentation.
-  - `PROJECT_STATUS.md`: Feature verification matrix.
+  - Full suite of technical specifications and test documents.
