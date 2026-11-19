@@ -1,0 +1,84 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="SynoraDesk"
+           Manufacturer="Synora"
+           Version="1.3.0"
+           UpgradeCode="4B89278A-02D1-4E1D-89C3-25A125E8DCF8"
+           Scope="perMachine"
+           Language="1033"
+           Codepage="65001">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of SynoraDesk is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- WixUI_InstallDir Workflow with License Agreement -->
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <!-- Optional Launch Checkbox on Exit Dialog -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch SynoraDesk" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#SynoraDeskExe]" />
+    <CustomAction Id="LaunchApplication" DllEntry="WixShellExec" Impersonate="yes" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+
+    <!-- App Metadata & Add/Remove Programs Icon -->
+    <Icon Id="AppIcon" SourceFile="..\..\build\windows\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/synoraww/SynoraDesk" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/synoraww/SynoraDesk" />
+
+    <!-- Installation Directory Structure (64-bit Program Files) -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="SynoraDesk" />
+    </StandardDirectory>
+
+    <!-- Start Menu Directory -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="SynoraDesk" />
+    </StandardDirectory>
+
+    <!-- Desktop Directory -->
+    <StandardDirectory Id="DesktopFolder" />
+
+    <!-- Application Components & Shortcuts -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="3B18F5B1-4F2A-4D88-9B2F-9C80D779A2B1">
+        <File Id="SynoraDeskExe"
+              Source="..\..\build\bin\pterodesk.exe"
+              Name="SynoraDesk.exe"
+              KeyPath="yes">
+          <!-- Desktop Shortcut -->
+          <Shortcut Id="DesktopShortcut"
+                    Directory="DesktopFolder"
+                    Name="SynoraDesk"
+                    Description="SynoraDesk - Pterodactyl Panel Modern Desktop Client"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="AppIcon"
+                    Advertise="no" />
+          <!-- Start Menu Shortcut -->
+          <Shortcut Id="StartMenuShortcut"
+                    Directory="ApplicationProgramsFolder"
+                    Name="SynoraDesk"
+                    Description="SynoraDesk - Pterodactyl Panel Modern Desktop Client"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="AppIcon"
+                    Advertise="no" />
+        </File>
+      </Component>
+    </ComponentGroup>
+
+    <!-- Start Menu Directory Cleanup on Uninstall -->
+    <Component Id="ApplicationShortcutFolderComponent" Directory="ApplicationProgramsFolder" Guid="7C52A4A8-1E76-4F25-B4B5-51E627C84128">
+      <RemoveFolder Id="CleanUpAppProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\Synora\SynoraDesk" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Feature Tree -->
+    <Feature Id="ProductFeature" Title="SynoraDesk" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ApplicationShortcutFolderComponent" />
+    </Feature>
+  </Package>
+</Wix>
