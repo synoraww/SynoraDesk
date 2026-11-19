@@ -1,0 +1,29 @@
+# Binaries and build outputs
+build/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+vendor/
+
+# Frontend build output
+dist/
+frontend/dist/
+
+# Local databases and runtime state
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.user

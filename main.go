@@ -1,0 +1,113 @@
+package main
+
+import (
+	"embed"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
+)
+
+//go:embed all:frontend/dist
+var assets embed.FS
+
+func main() {
+	detachedFlag := flag.Bool("detached", false, "Run in detached window mode")
+	typeFlag := flag.String("type", "server", "Type of detached view")
+	serverFlag := flag.String("server", "", "Server identifier for detached mode")
+	subtabFlag := flag.String("subtab", "ide", "Subtab for detached mode")
+	fileFlag := flag.String("file", "", "File path for editor")
+	sftpFlag := flag.Bool("sftp", false, "Is SFTP file")
+	titleFlag := flag.String("title", "", "Window title")
+	flag.Parse()
+
+	app := NewApp()
+	windowTitle := "SynoraDesk"
+	width := 1400
+	height := 900
+	minWidth := 1024
+	minHeight := 700
+
+	if *detachedFlag {
+		app.detachedConfig = DetachedWindowConfig{
+			IsDetached: true,
+			Type:       *typeFlag,
+			Server:     *serverFlag,
+			Subtab:     *subtabFlag,
+			FilePath:   *fileFlag,
+			IsSFTP:     *sftpFlag,
+			Title:      *titleFlag,
+		}
+		if *titleFlag != "" {
+			windowTitle = fmt.Sprintf("SynoraDesk - %s", *titleFlag)
+		} else if *serverFlag != "" {
+			windowTitle = fmt.Sprintf("SynoraDesk - %s", *serverFlag)
+		} else {
+			windowTitle = "SynoraDesk - Cửa sổ riêng"
+		}
+		width = 1260
+		height = 800
+		minWidth = 720
+		minHeight = 480
+	} else {
+		// Load persisted window dimensions if available
+		configDir, _ := os.UserConfigDir()
+		if configDir != "" {
+			windowStatePath := filepath.Join(configDir, "PteroDesk", "data", "window_state.json")
+			if data, err := os.ReadFile(windowStatePath); err == nil {
+				var state struct {
+					Width       int  `json:"width"`
+					Height      int  `json:"height"`
+					X           int  `json:"x"`
+					Y           int  `json:"y"`
+					IsMaximised bool `json:"is_maximised"`
+				}
+				if err := json.Unmarshal(data, &state); err == nil {
+					if state.Width >= minWidth && state.Height >= minHeight {
+						width = state.Width
+						height = state.Height
+					}
+				}
+			}
+		}
+	}
+
+	err := wails.Run(&options.App{
+		Title:     windowTitle,
+		Width:     width,
+		Height:    height,
+		MinWidth:  minWidth,
+		MinHeight: minHeight,
+		Frameless: true,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		BackgroundColour: &options.RGBA{R: 11, G: 15, B: 25, A: 255},
+		OnStartup:        app.startup,
+		OnShutdown:       app.shutdown,
+		Bind: []interface{}{
+			app,
+		},
+		Windows: &windows.Options{
+			WebviewIsTransparent:              false,
+			WindowIsTranslucent:               false,
+			DisableWindowIcon:                 false,
+			DisableFramelessWindowDecorations: false,
+			IsZoomControlEnabled:              true,
+			DisablePinchZoom:                  false,
+			ZoomFactor:                        1.0,
+			WebviewUserDataPath:               "",
+			Theme:                             windows.Dark,
+		},
+	})
+
+	if err != nil {
+		println("Error:", err.Error())
+	}
+}
