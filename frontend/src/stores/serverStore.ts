@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { usePanelStore } from './panelStore';
 
 export interface Server {
   server_owner: boolean;
@@ -115,19 +116,27 @@ export const useServerStore = create<ServerState>((set, get) => ({
 
   fetchServers: async () => {
     set({ loading: true, error: null });
+    const start = performance.now();
     try {
       const app = getWailsBindings();
       const servers = await app.ListServers();
+      const elapsed = performance.now() - start;
+      usePanelStore.getState().recordLatency(elapsed);
       set({ servers: servers || [], loading: false });
     } catch (err: any) {
+      const elapsed = performance.now() - start;
+      usePanelStore.getState().recordLatency(elapsed);
       set({ error: err.message || 'Failed to fetch servers', loading: false });
     }
   },
 
   fetchServer: async (identifier) => {
+    const start = performance.now();
     try {
       const app = getWailsBindings();
       const server = await app.GetServer(identifier);
+      const elapsed = performance.now() - start;
+      usePanelStore.getState().recordLatency(elapsed);
       set({ selectedServer: server });
     } catch (err: any) {
       set({ error: err.message || 'Failed to fetch server' });
@@ -152,9 +161,12 @@ export const useServerStore = create<ServerState>((set, get) => ({
   },
 
   fetchDashboardStats: async () => {
+    const start = performance.now();
     try {
       const app = getWailsBindings();
       const stats = await app.GetDashboardStats();
+      const elapsed = performance.now() - start;
+      usePanelStore.getState().recordLatency(elapsed);
       set({ dashboardStats: stats });
     } catch (err: any) {
       set({ error: err.message || 'Failed to fetch dashboard stats' });

@@ -552,10 +552,6 @@ export const ServersPage: React.FC<ServersPageProps> = ({
                     <HardDrive size={14} color={diskOverloaded ? '#EF4444' : '#94A3B8'} />
                     <span>{diskValMB} / {s.limits?.disk ? `${s.limits.disk}M` : '∞'}</span>
                   </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--color-text-secondary)', fontSize: '11px' }} title="Network (Rx / Tx)">
-                    <Radio size={13} color="var(--color-primary-light)" />
-                    <span>{formatNetSpeed(usage?.resources?.network_rx_bytes || 0)} / {formatNetSpeed(usage?.resources?.network_tx_bytes || 0)}</span>
-                  </span>
                 </div>
 
                 {/* Column 5: Modern Sleek Chevron Action */}

@@ -44,12 +44,15 @@
     "unlimited": "Không giới hạn",
     "back": "Quay lại",
     "manage": "Quản lý",
-    "retry": "Thử lại"
+    "retry": "Thử lại",
+    "reset": "Đặt lại",
+    "done": "Hoàn tất & Đóng",
+    "detachedBadge": "Cửa sổ phụ"
   },
   "nav": {
     "servers": "Máy chủ",
     "accountManager": "Quản lý tài khoản",
-    "ide": "IDE Studio",
+    "ide": "IDE",
     "activity": "Nhật ký hoạt động",
     "settings": "Cài đặt ứng dụng",
     "console": "Bảng điều khiển",
@@ -163,17 +166,50 @@
       "activity_read": "Cho phép xem nhật ký hoạt động của máy chủ."
     },
     "categories": {
-      "control": { "title": "Điều khiển / Nguồn & Console", "description": "Điều khiển nguồn máy chủ và gửi lệnh qua console." },
-      "user": { "title": "Người dùng / Quản lý thành viên", "description": "Quản lý thành viên khác. Người dùng không thể sửa tài khoản của mình hoặc cấp quyền họ không có." },
-      "file": { "title": "Tệp & SFTP", "description": "Quản lý tệp và thư mục trên máy chủ." },
-      "plugin": { "title": "Plugin & tiện ích", "description": "Xem và cài đặt plugin Minecraft." },
-      "backup": { "title": "Bản sao lưu", "description": "Tạo và quản lý bản sao lưu máy chủ." },
-      "allocation": { "title": "Phân bổ mạng", "description": "Quản lý các cổng mạng của máy chủ." },
-      "startup": { "title": "Khởi động & Docker", "description": "Xem và quản lý cấu hình khởi động máy chủ." },
-      "database": { "title": "Cơ sở dữ liệu", "description": "Quản lý cơ sở dữ liệu của máy chủ." },
-      "schedule": { "title": "Lịch & tự động hóa", "description": "Quản lý lịch và tác vụ đã lên lịch." },
-      "settings": { "title": "Cài đặt", "description": "Quản lý cài đặt máy chủ." },
-      "activity": { "title": "Nhật ký hoạt động", "description": "Xem nhật ký hoạt động của máy chủ." }
+      "control": {
+        "title": "Điều khiển / Nguồn & Console",
+        "description": "Điều khiển nguồn máy chủ và gửi lệnh qua console."
+      },
+      "user": {
+        "title": "Người dùng / Quản lý thành viên",
+        "description": "Quản lý thành viên khác. Người dùng không thể sửa tài khoản của mình hoặc cấp quyền họ không có."
+      },
+      "file": {
+        "title": "Tệp & SFTP",
+        "description": "Quản lý tệp và thư mục trên máy chủ."
+      },
+      "plugin": {
+        "title": "Plugin & tiện ích",
+        "description": "Xem và cài đặt plugin Minecraft."
+      },
+      "backup": {
+        "title": "Bản sao lưu",
+        "description": "Tạo và quản lý bản sao lưu máy chủ."
+      },
+      "allocation": {
+        "title": "Phân bổ mạng",
+        "description": "Quản lý các cổng mạng của máy chủ."
+      },
+      "startup": {
+        "title": "Khởi động & Docker",
+        "description": "Xem và quản lý cấu hình khởi động máy chủ."
+      },
+      "database": {
+        "title": "Cơ sở dữ liệu",
+        "description": "Quản lý cơ sở dữ liệu của máy chủ."
+      },
+      "schedule": {
+        "title": "Lịch & tự động hóa",
+        "description": "Quản lý lịch và tác vụ đã lên lịch."
+      },
+      "settings": {
+        "title": "Cài đặt",
+        "description": "Quản lý cài đặt máy chủ."
+      },
+      "activity": {
+        "title": "Nhật ký hoạt động",
+        "description": "Xem nhật ký hoạt động của máy chủ."
+      }
     }
   },
   "serverIDE": {
@@ -267,7 +303,26 @@
   "dashboard": {
     "noPanelTitle": "Chưa kết nối Pterodactyl Panel",
     "noPanelDesc": "Kết nối Pterodactyl Panel bằng Client API hoặc Application API để bắt đầu quản lý máy chủ game và hạ tầng.",
-    "addFirstPanel": "Thêm Panel đầu tiên"
+    "addFirstPanel": "Thêm Panel đầu tiên",
+    "title": "Bảng điều khiển",
+    "connectedTo": "Đã kết nối với {{name}}",
+    "subtitle": "Tổng quan hạ tầng và truy cập nhanh máy chủ",
+    "refresh": "Làm mới",
+    "totalServers": "Tổng số máy chủ",
+    "totalServersDesc": "Truy cập qua Client API",
+    "runningServers": "Đang chạy",
+    "runningServersDesc": "Tiến trình máy chủ đang hoạt động",
+    "offlineServers": "Đã tắt / Tạm dừng",
+    "offlineServersDesc": "Đã dừng hoặc tạm khóa",
+    "nodesManaged": "Số Node quản lý",
+    "nodesWingsDesc": "Máy chủ Wings daemon",
+    "nodesAppKeyRequired": "Cần Application API",
+    "serversOverview": "Tổng quan máy chủ",
+    "viewAll": "Xem tất cả",
+    "noServersFound": "Không tìm thấy máy chủ nào trên panel này",
+    "unlimitedRam": "RAM Không giới hạn",
+    "recentActivities": "Hoạt động gần đây",
+    "noRecentActivities": "Chưa có hoạt động nào được ghi nhận"
   },
   "server": {
     "status": {
@@ -338,7 +393,9 @@
     "reinstallModalTitle": "Xác nhận cài đặt lại máy chủ",
     "reinstallModalWarning": "Hành động này sẽ xóa hoặc ghi đè một số tệp hệ thống mặc định!",
     "reinstallModalInstruction": "Để xác nhận, vui lòng nhập chữ \"reinstall\" vào ô bên dưới:",
-    "reinstallConfirmBtn": "Tôi hiểu rủi ro, cài đặt lại"
+    "reinstallConfirmPrompt": "Nhập \"reinstall\" để xác nhận:",
+    "reinstallConfirmBtn": "Tôi hiểu rủi ro, cài đặt lại",
+    "confirmReinstall": "Xác nhận cài lại máy chủ"
   },
   "startupTab": {
     "title": "Khởi động & Biến môi trường",
@@ -441,7 +498,14 @@
     "aboutTitle": "Thông tin SynoraDesk",
     "aboutDesc": "Chương trình quản lý máy chủ Pterodactyl thông API cực VUÝP.",
     "version": "SynoraDesk 1.02A (Ứng dụng máy tính Windows x64)",
-    "builtWith": "Xây dựng với Go + Wails v2 + React 19"
+    "builtWith": "Xây dựng với Go + Wails v2 + React 19",
+    "animationTitle": "Hiệu ứng chuyển động (Animation)",
+    "animationSubtitle": "Tùy chỉnh độ mượt mà hoặc chế độ nhẹ nhàng để tiết kiệm tài nguyên",
+    "animFull": "Đầy đủ (Mượt mà)",
+    "animFullDesc": "Hiệu ứng chuyển cảnh đầy đủ",
+    "animLight": "Nhẹ (Tối giản)",
+    "animLightDesc": "Phản hồi tức thì, giảm tải phần cứng",
+    "securityTitle": "Bảo mật & Kiểm tra hệ thống"
   },
   "wallpaper": {
     "modalTitle": "Tùy chỉnh & Căn chỉnh hình nền",
@@ -866,7 +930,7 @@
     "copyAddress": "Sao chép địa chỉ máy chủ",
     "tabConsole": "Console",
     "tabFiles": "Tệp",
-    "tabIde": "IDE Studio",
+    "tabIde": "IDE",
     "tabDatabases": "Cơ sở dữ liệu",
     "tabBackups": "Sao lưu",
     "tabSubusers": "Người dùng",
@@ -874,7 +938,7 @@
     "tabStartup": "Khởi động",
     "tabSettings": "Cài đặt",
     "clearConsole": "Xóa nhật ký console",
-    "consoleCommandPlaceholder": "Nhập lệnh console... (Dùng ↑/↓ để xem lại lệnh)",
+    "consoleCommandPlaceholder": "Nhập lệnh console...",
     "upload": "Tải lên",
     "newFolder": "Thư mục mới",
     "newFile": "Tệp mới",
@@ -1008,7 +1072,8 @@
     "batchDeleteConfirm": "Bạn có chắc muốn xóa vĩnh viễn {count} mục đã chọn?",
     "batchDeleteMessage": "Đã xóa {count} mục.",
     "addressCopied": "Đã sao chép {address} vào bộ nhớ tạm.",
-    "keyCopied": "Đã sao chép {key}"
+    "keyCopied": "Đã sao chép {key}",
+    "databases": "Cơ sở dữ liệu"
   },
   "titlebar": {
     "minimize": "Thu nhỏ",
@@ -1051,7 +1116,13 @@
     "lockedOutTitle": "Tạm khóa an toàn",
     "lockedOutDesc": "Đã nhập sai quá {max} lần. Bộ nhớ bảo vệ cục bộ chống can thiệp. Vui lòng đợi đếm ngược kết thúc để thử lại.",
     "autoWipeTitle": "Tự động xóa sạch dữ liệu ứng dụng (Tùy chọn)",
-    "autoWipeDesc": "Xóa sạch cơ sở dữ liệu và khóa API nếu có người cố ý nhập sai liên tiếp nhiều lần."
+    "autoWipeDesc": "Xóa sạch cơ sở dữ liệu và khóa API nếu có người cố ý nhập sai liên tiếp nhiều lần.",
+    "lockedBadge": "Đã khóa",
+    "passwordPlaceholder": "Nhập mật khẩu...",
+    "incorrectCurrentPasscode": "Mật mã hiện tại không đúng",
+    "passcodeMismatch": "Mật mã xác nhận không khớp",
+    "disableLockTitle": "Tắt khóa ứng dụng",
+    "setupLockTitle": "Thiết lập khóa"
   },
   "updates": {
     "title": "Kiểm tra bản cập nhật",
@@ -1061,5 +1132,58 @@
     "recentImprovements": "Tính năng mới nổi bật (v1.02A)",
     "checking": "Đang kiểm tra...",
     "checkAgain": "Kiểm tra lại"
+  },
+  "diagnostics": {
+    "title": "Kiểm tra hệ thống & Chẩn đoán lỗi",
+    "subtitle": "Windows DPAPI, cơ sở dữ liệu, tài nguyên và cấu hình",
+    "badge": "Kiểm tra",
+    "scanning": "Đang phân tích cấu hình hệ thống...",
+    "statusHealthy": "Hoạt động tốt",
+    "statusError": "Gặp sự cố",
+    "copyReport": "Sao chép báo cáo lỗi",
+    "copied": "Đã sao chép báo cáo",
+    "reportCopied": "Đã sao chép báo cáo chẩn đoán hệ thống vào clipboard",
+    "reportOnGithub": "Báo lỗi trên GitHub",
+    "openDiagnosticsBtn": "Kiểm tra công cụ & Báo lỗi"
+  },
+  "updater": {
+    "errorTitle": "Lỗi kiểm tra phiên bản",
+    "errorFetchFailed": "Không thể lấy thông tin phiên bản từ GitHub: {error}",
+    "retryBtn": "Thử lại",
+    "openReleasesPage": "Xem trên GitHub Releases",
+    "noReleasesFound": "Chưa tìm thấy bản phát hành nào trên GitHub."
+  },
+  "ping": {
+    "latency": "Độ trễ đến Panel",
+    "checking": "Đang kiểm tra kết nối...",
+    "offline": "Mất kết nối"
+  },
+  "welcome": {
+    "title": "Chào mừng đến với SynoraDesk",
+    "subtitle": "Ứng dụng máy tính nguồn mở hiện đại dành cho Pterodactyl Panel",
+    "tagline": "Quản trị máy chủ tập trung, hiệu năng vượt trội và cam kết không thu thập dữ liệu nhạy cảm",
+    "badgeOpenSource": "Mã nguồn mở",
+    "badgeLocalFirst": "Lưu trữ cục bộ",
+    "badgeZeroTelemetry": "Không Telemetry",
+    "featPanelsTitle": "Đa Panel & Đa Tài khoản",
+    "featPanelsDesc": "Kết nối đồng thời nhiều Panel Pterodactyl không giới hạn với xác thực Client API & Application API an toàn.",
+    "featToolsTitle": "Bộ công cụ Quản trị Mạnh mẽ",
+    "featToolsDesc": "Tích hợp sẵn SFTP Explorer kéo thả, Monaco Code Editor, Quản lý Database MySQL/PostgreSQL và Console siêu mượt.",
+    "featSecurityTitle": "Bảo mật Cấp Phần cứng",
+    "featSecurityDesc": "Bảo vệ bởi Windows Data Protection API (DPAPI) + AES-256-GCM, kết hợp khóa ứng dụng bằng mã PIN hoặc mật khẩu.",
+    "termsTitle": "Điều khoản Dịch vụ & Cam kết Bảo mật Dữ liệu",
+    "termsP1": "SynoraDesk được xây dựng hoàn toàn phi lợi nhuận và mã nguồn mở. Chúng tôi tôn trọng tuyệt đối quyền riêng tư và quyền kiểm soát dữ liệu của bạn.",
+    "termsCommitmentHeading": "Cam kết KHÔNG thu thập dữ liệu nhạy cảm:",
+    "termsCommitment1": "Tuyệt đối không lưu trữ API Key, mật khẩu, cơ sở dữ liệu hay token ra ngoài máy tính cá nhân của bạn.",
+    "termsCommitment2": "Mọi thông tin kết nối và cấu hình được mã hóa cục bộ bằng Windows DPAPI và lưu trong SQLite trên máy bạn.",
+    "termsCommitment3": "Không gửi dữ liệu người dùng, không theo dõi hành vi ẩn danh, không có telemetry hoặc quảng cáo của bên thứ ba.",
+    "termsCommitment4": "Toàn bộ lưu lượng mạng chỉ diễn ra trực tiếp giữa máy bạn và địa chỉ Pterodactyl Panel do chính bạn thiết lập.",
+    "checkboxLabel": "Tôi đã đọc, hiểu rõ và đồng ý với Điều khoản dịch vụ và Cam kết không thu thập dữ liệu nhạy cảm của SynoraDesk.",
+    "getStartedBtn": "Bắt đầu sử dụng SynoraDesk",
+    "resetDataBtn": "Xóa dữ liệu lưu trữ",
+    "resetConfirmTitle": "Xác nhận xóa sạch toàn bộ dữ liệu",
+    "resetConfirmDesc": "Thao tác này sẽ xóa sạch toàn bộ cấu hình, Panels, cơ sở dữ liệu SQLite và khóa mã hóa trên máy tính này. Ứng dụng sẽ được làm mới hoàn toàn. Bạn có chắc chắn không?",
+    "revisitTerms": "Xem lại Điều khoản & Cam kết dữ liệu",
+    "wipeDataSuccess": "Đã xóa toàn bộ dữ liệu ứng dụng thành công"
   }
 }

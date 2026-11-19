@@ -10,6 +10,10 @@ export function AssignServerAllocation(arg1) {
   return window['go']['main']['App']['AssignServerAllocation'](arg1);
 }
 
+export function CheckGitHubUpdates(arg1) {
+  return window['go']['main']['App']['CheckGitHubUpdates'](arg1);
+}
+
 export function ChmodFile(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ChmodFile'](arg1, arg2, arg3, arg4);
 }
@@ -162,6 +166,10 @@ export function GetActivePanel() {
   return window['go']['main']['App']['GetActivePanel']();
 }
 
+export function GetActivePanelPing() {
+  return window['go']['main']['App']['GetActivePanelPing']();
+}
+
 export function GetAppDataDir() {
   return window['go']['main']['App']['GetAppDataDir']();
 }
@@ -236,6 +244,10 @@ export function GetServerResources(arg1) {
 
 export function GetServerStartup(arg1) {
   return window['go']['main']['App']['GetServerStartup'](arg1);
+}
+
+export function GetSystemDiagnostics() {
+  return window['go']['main']['App']['GetSystemDiagnostics']();
 }
 
 export function GetTwoFactorDetails() {
@@ -320,6 +332,10 @@ export function OpenBackgroundFolder() {
 
 export function OpenDetachedWindow(arg1) {
   return window['go']['main']['App']['OpenDetachedWindow'](arg1);
+}
+
+export function PingActivePanel() {
+  return window['go']['main']['App']['PingActivePanel']();
 }
 
 export function PullRemoteFile(arg1, arg2, arg3, arg4) {

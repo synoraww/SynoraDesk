@@ -26,6 +26,7 @@ import {
   Trash2,
   Edit2,
   Save,
+  Send,
   X,
   Radio,
   FileCode2,
@@ -73,6 +74,7 @@ import {
 } from 'lucide-react';
 import { ColorizedLine, ConsoleToolbar } from '../components/common/ConsoleViewer';
 import { ServerSectionHeader } from '../components/server/ServerSectionHeader';
+import { ServerSettingsTab } from '../components/server/settings/ServerSettingsTab';
 import { PteroMonacoEditor } from '../components/common/PteroMonacoEditor';
 import { ServerIDE } from '../components/common/ServerIDE';
 import { ResourceChart } from '../components/common/ResourceChart';
@@ -2304,15 +2306,11 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               overflow: 'hidden',
             }}
           >
-            {/* Smart Console Toolbar */}
+            {/* Smart Minimalist Console Toolbar */}
             <ConsoleToolbar
               autoScroll={autoScroll}
               onToggleAutoScroll={() => setAutoScroll(!autoScroll)}
               onClear={() => setConsoleLines([])}
-              onCopyAll={() => {
-                const text = consoleLines.join('\n');
-                navigator.clipboard.writeText(text);
-              }}
               searchQuery={consoleSearch}
               onSearchChange={setConsoleSearch}
             />
@@ -2346,30 +2344,30 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
 
             {!autoScroll && (
               <button
+                type="button"
                 onClick={scrollToBottom}
+                title="Cuộn xuống cuối log"
+                className="btn-interactive"
                 style={{
                   position: 'absolute',
-                  bottom: '68px',
-                  right: '24px',
+                  bottom: '58px',
+                  right: '20px',
+                  width: '32px',
+                  height: '32px',
                   backgroundColor: 'var(--color-primary)',
                   color: '#FFFFFF',
                   border: 'none',
-                  borderRadius: '20px',
-                  padding: '6px 14px',
-                  fontSize: '11px',
-                  fontWeight: 600,
+                  borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
+                  justifyContent: 'center',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.6)',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
                   zIndex: 20,
                   transition: 'all 0.15s ease',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
               >
-                <ArrowDown size={13} /> Scroll to Bottom
+                <ArrowDown size={15} />
               </button>
             )}
 
@@ -2404,40 +2402,26 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               />
 
               <button
-                type="button"
-                onClick={() => setConsoleLines([])}
-                title={t('serverDetail.clearConsole')}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  color: '#EF4444',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <Trash2 size={12} /> Clear
-              </button>
-
-              <button
                 type="submit"
+                className="btn-interactive"
+                disabled={!commandInput.trim()}
+                title="Gửi lệnh (Enter)"
                 style={{
-                  padding: '6px 14px',
-                  backgroundColor: 'var(--color-surface-hover)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  fontWeight: 500,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '30px',
+                  borderRadius: '5px',
+                  backgroundColor: commandInput.trim() ? 'var(--color-primary)' : 'var(--color-surface-hover)',
+                  border: `1px solid ${commandInput.trim() ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                  color: commandInput.trim() ? '#FFFFFF' : 'var(--color-text-muted)',
+                  cursor: commandInput.trim() ? 'pointer' : 'default',
+                  transition: 'all 0.12s ease',
+                  flexShrink: 0,
                 }}
               >
-                Send
+                <Send size={13} />
               </button>
             </form>
           </div>
@@ -3728,7 +3712,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
 
         {/* Startup tab */}
         {activeTab === 'startup' && (
-          <div className="custom-scrollbar" style={{ padding: '20px', flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div className="custom-scrollbar" style={{ padding: '24px', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', maxWidth: '1280px', margin: '0 auto', width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <ServerSectionHeader
               icon={Play}
               title={t('startupTab.title') || 'Startup Configuration'}
@@ -4576,407 +4560,35 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
 
         {/* SERVER SETTINGS SUBTAB */}
         {activeTab === 'settings' && (
-          <div
-            className="custom-scrollbar"
-            style={{
-              padding: '24px',
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '24px',
-              maxWidth: '960px',
-              margin: '0 auto',
-              width: '100%',
-              boxSizing: 'border-box',
+          <ServerSettingsTab
+            server={server}
+            identifier={identifier}
+            serverName={settingServerName}
+            serverDesc={settingServerDesc}
+            savingSettings={savingSettings}
+            onServerNameChange={setSettingServerName}
+            onServerDescChange={setSettingServerDesc}
+            onSaveDetails={handleRenameServer}
+            onCopyText={(text) => {
+              navigator.clipboard.writeText(text);
+              addNotification({
+                type: 'success',
+                title: t('common.copied'),
+                message: text,
+                duration: 2000,
+              });
             }}
-          >
-            {/* Header */}
-            <ServerSectionHeader
-              icon={Settings}
-              title={t('serverSettings.title') || 'Server Settings'}
-              subtitle={t('serverSettings.subtitle') || 'Reinstall, rename, SFTP credentials, and dangerous actions'}
-            />
-
-            {/* Card 0: Server Information (UUID, Node, Egg, Internal ID) */}
-            <div
-              style={{
-                backgroundColor: 'var(--color-surface)',
-                borderRadius: '10px',
-                border: '1px solid var(--color-border)',
-                padding: '20px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <div>
-                  <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ServerIcon size={18} color="var(--color-primary-light)" /> {t('serverSettings.serverInfoTitle')}
-                  </h3>
-                  <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                    {t('serverSettings.serverInfoSubtitle')}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                  gap: '16px',
-                }}
-              >
-                {/* UUID */}
-                <div
-                  style={{
-                    backgroundColor: 'rgba(11, 15, 25, 0.4)',
-                    padding: '12px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--color-border-subtle)',
-                  }}
-                >
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-                    {t('serverSettings.uuidLabel')}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '12px',
-                        color: 'var(--color-text)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={server?.uuid || identifier}
-                    >
-                      {server?.uuid || identifier}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(server?.uuid || identifier);
-                        addNotification({
-                          type: 'success',
-                          title: t('common.copied'),
-                          message: server?.uuid || identifier,
-                          duration: 2000,
-                        });
-                      }}
-                      title={t('serverSettings.copyUuid')}
-                      style={{
-                        padding: '3px 6px',
-                        backgroundColor: 'var(--color-surface-hover)',
-                        border: '1px solid var(--color-border)',
-                        color: 'var(--color-text-secondary)',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Copy size={12} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Node */}
-                <div
-                  style={{
-                    backgroundColor: 'rgba(11, 15, 25, 0.4)',
-                    padding: '12px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--color-border-subtle)',
-                  }}
-                >
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-                    {t('serverSettings.nodeLabel')}
-                  </div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>
-                    {server?.node || 'N/A'}
-                  </div>
-                </div>
-
-                {/* Egg */}
-                <div
-                  style={{
-                    backgroundColor: 'rgba(11, 15, 25, 0.4)',
-                    padding: '12px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--color-border-subtle)',
-                  }}
-                >
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-                    {t('serverSettings.eggLabel')}
-                  </div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-primary-light)' }}>
-                    {server?.egg_name || 'Generic / Custom Egg'}
-                  </div>
-                </div>
-
-                {/* Internal ID */}
-                {server?.internal_id !== undefined && (
-                  <div
-                    style={{
-                      backgroundColor: 'rgba(11, 15, 25, 0.4)',
-                      padding: '12px 14px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--color-border-subtle)',
-                    }}
-                  >
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-                      {t('serverSettings.internalIdLabel')}
-                    </div>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)' }}>
-                      #{server.internal_id}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Card 1: Rename Server */}
-            <div
-              style={{
-                backgroundColor: 'var(--color-surface)',
-                borderRadius: '10px',
-                border: '1px solid var(--color-border)',
-                padding: '20px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <div>
-                  <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)' }}>
-                    {t('serverSettings.detailsTitle')}
-                  </h3>
-                  <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                    {t('serverSettings.detailsSubtitle')}
-                  </p>
-                </div>
-              </div>
-
-              <form onSubmit={handleRenameServer} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                    {t('serverSettings.serverNameLabel')}
-                  </label>
-                  <input
-                    type="text"
-                    value={settingServerName}
-                    onChange={(e) => setSettingServerName(e.target.value)}
-                    placeholder={t('serverSettings.serverNamePlaceholder')}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--color-bg)',
-                      border: '1px solid var(--color-border)',
-                      color: 'var(--color-text)',
-                      fontSize: '13px',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                    {t('serverSettings.descriptionLabel')}
-                  </label>
-                  <textarea
-                    value={settingServerDesc}
-                    onChange={(e) => setSettingServerDesc(e.target.value)}
-                    placeholder={t('serverSettings.descriptionPlaceholder')}
-                    rows={3}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--color-bg)',
-                      border: '1px solid var(--color-border)',
-                      color: 'var(--color-text)',
-                      fontSize: '13px',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      resize: 'vertical',
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-                  <button
-                    type="submit"
-                    disabled={savingSettings}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 18px',
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--color-primary)',
-                      border: 'none',
-                      color: '#FFFFFF',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      cursor: savingSettings ? 'not-allowed' : 'pointer',
-                      opacity: savingSettings ? 0.6 : 1,
-                    }}
-                  >
-                    <Save size={14} /> {savingSettings ? t('common.saving') : t('serverSettings.saveNameBtn')}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Card 2: Reinstall Server */}
-            <div
-              style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.04)',
-                borderRadius: '10px',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                padding: '20px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <AlertOctagon size={20} color="#EF4444" />
-                  <div>
-                    <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#EF4444' }}>
-                      {t('serverSettings.reinstallTitle')}
-                    </h3>
-                    <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                      {t('serverSettings.dangerZone')}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  fontSize: '13px',
-                  color: 'var(--color-text-secondary)',
-                  lineHeight: '1.6',
-                  backgroundColor: 'rgba(0, 0, 0, 0.25)',
-                  padding: '12px 16px',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(239, 68, 68, 0.2)',
-                  marginBottom: '16px',
-                }}
-              >
-                {t('serverSettings.reinstallDesc')}
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReinstallConfirmInput('');
-                    setReinstallModalOpen(true);
-                  }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 18px',
-                    borderRadius: '6px',
-                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    color: '#EF4444',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.25)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)')}
-                >
-                  <RotateCw size={14} /> {t('serverSettings.reinstallBtn')}
-                </button>
-              </div>
-            </div>
-
-            {/* Reinstall Confirmation Modal */}
-            {reinstallModalOpen && (
-              <div
-                style={{
-                  position: 'fixed',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'rgba(0, 0, 0, 0.75)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 9999,
-                  backdropFilter: 'blur(4px)',
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: 'var(--color-surface)',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    padding: '24px',
-                    maxWidth: '480px',
-                    width: '90%',
-                    boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                    <AlertTriangle size={22} color="#EF4444" />
-                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text)' }}>
-                      {t('serverSettings.reinstallModalTitle')}
-                    </h3>
-                  </div>
-
-                  <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: '1.6', marginBottom: '16px' }}>
-                    {t('serverSettings.reinstallDesc')}
-                  </p>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                    <button
-                      onClick={() => setReinstallModalOpen(false)}
-                      disabled={reinstalling}
-                      style={{
-                        padding: '8px 16px',
-                        borderRadius: '6px',
-                        backgroundColor: 'var(--color-surface-hover)',
-                        border: '1px solid var(--color-border)',
-                        color: 'var(--color-text)',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {t('common.cancel')}
-                    </button>
-                    <button
-                      onClick={handleReinstallServer}
-                      disabled={reinstalling}
-                      style={{
-                        padding: '8px 18px',
-                        borderRadius: '6px',
-                        backgroundColor: '#EF4444',
-                        border: 'none',
-                        color: '#FFFFFF',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        cursor: reinstalling ? 'not-allowed' : 'pointer',
-                        opacity: reinstalling ? 0.7 : 1,
-                      }}
-                    >
-                      {reinstalling ? t('common.loading') : t('serverSettings.reinstallConfirmBtn')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+            reinstallModalOpen={reinstallModalOpen}
+            onOpenReinstallModal={() => {
+              setReinstallConfirmInput('');
+              setReinstallModalOpen(true);
+            }}
+            onCloseReinstallModal={() => setReinstallModalOpen(false)}
+            reinstalling={reinstalling}
+            reinstallConfirmInput={reinstallConfirmInput}
+            onReinstallConfirmInputChange={setReinstallConfirmInput}
+            onConfirmReinstall={handleReinstallServer}
+          />
         )}
       </div>
 

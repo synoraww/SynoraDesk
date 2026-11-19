@@ -15,6 +15,7 @@ import logo from '../../assets/images/logo-universal.png';
 import { useUIStore } from '../../stores/uiStore';
 import { usePanelStore } from '../../stores/panelStore';
 import { useI18n } from '../../i18n';
+import { APP_CONFIG } from '../../config/version';
 import { PanelFavicon } from '../common/PanelFavicon';
 
 export type NavItemKey =
@@ -104,7 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
                 SynoraDesk
               </span>
               <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', lineHeight: 1 }}>
-                Phiên bản 1.02A 
+                Phiên bản {APP_CONFIG.version}
               </span>
             </div>
           )}

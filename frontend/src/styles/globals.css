@@ -404,4 +404,24 @@ html, body, #root {
   box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.25);
 }
 
+/* Animation Mode Controls (Full vs Light) */
+[data-animation="light"] * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.05s !important;
+}
+
+[data-animation="light"] .anim-modal-in,
+[data-animation="light"] .anim-fade-in,
+[data-animation="light"] .anim-shake,
+[data-animation="light"] .anim-pulse {
+  animation: none !important;
+}
+
+[data-animation="light"] .card-hover-interactive:hover,
+[data-animation="light"] .btn-interactive:active {
+  transform: none !important;
+}
+
+
 

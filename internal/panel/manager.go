@@ -275,6 +275,17 @@ func (m *Manager) GetClientAPI() (*api.ClientAPI, error) {
 	return client, nil
 }
 
+// GetActivePanelLatencyMs returns the last recorded latency in ms for the active panel
+func (m *Manager) GetActivePanelLatencyMs() int64 {
+	if m.activePanel == "" {
+		return 0
+	}
+	if client, ok := m.clientAPIs[m.activePanel]; ok {
+		return client.GetLastLatencyMs()
+	}
+	return 0
+}
+
 // GetClientAPIForPanel returns the Client API for a specific panel ID
 func (m *Manager) GetClientAPIForPanel(id string) (*api.ClientAPI, error) {
 	client, ok := m.clientAPIs[id]

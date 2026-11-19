@@ -12,6 +12,8 @@ import { SettingsPage } from './pages/Settings';
 import { SFTPExplorerPage } from './pages/SFTPExplorer';
 import { DatabaseManagerPage } from './pages/DatabaseManager';
 import { FileEditorTab } from './components/common/FileEditorTab';
+import { WelcomeModal } from './components/common/WelcomeModal';
+import { APP_CONFIG } from './config/version';
 import { usePanelStore } from './stores/panelStore';
 import { useUIStore } from './stores/uiStore';
 import { useWorkspaceStore, WorkspaceTab } from './stores/workspaceStore';
@@ -20,6 +22,15 @@ import { main } from '../wailsjs/go/models';
 
 export function App() {
   const [isPanelModalOpen, setIsPanelModalOpen] = useState(false);
+  const [isWelcomeOpen, setIsWelcomeOpen] = useState<boolean>(() => {
+    // Detached secondary windows do not need onboarding
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('detached') === 'true') return false;
+
+    const accepted = localStorage.getItem('pterodesk_terms_accepted') === 'true';
+    const version = localStorage.getItem('pterodesk_terms_version');
+    return !accepted || version !== APP_CONFIG.termsVersion;
+  });
 
   // Detached standalone window configuration (via Go process flags or URL params)
   const [detachedConfig, setDetachedConfig] = useState<main.DetachedWindowConfig | null>(() => {
@@ -486,6 +497,13 @@ export function App() {
             fetchPanels();
             fetchActivePanel();
           }}
+        />
+
+        {/* First-time Welcome & Privacy Terms Onboarding Modal */}
+        <WelcomeModal
+          isOpen={isWelcomeOpen}
+          onClose={() => setIsWelcomeOpen(false)}
+          canDismissWithoutAccept={false}
         />
       </AppShell>
 

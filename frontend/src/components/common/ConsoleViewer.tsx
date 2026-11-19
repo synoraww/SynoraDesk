@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Trash2, ArrowDown, Copy, Check, Search, ExternalLink } from 'lucide-react';
+import React from 'react';
+import { Trash2, ArrowDown, Search, ExternalLink } from 'lucide-react';
 
 // Standard 16 ANSI colors (Normal + Bright)
 const ANSI_COLORS: { [key: number]: string } = {
@@ -318,13 +318,12 @@ export const ColorizedLine: React.FC<{ line: string }> = ({ line }) => {
 };
 
 /**
- * Smart Console Toolbar Component with Clear, Auto-scroll, Search, and Copy
+ * Smart Minimalist Console Toolbar Component with Clear, Auto-scroll, and Search
  */
 interface ConsoleToolbarProps {
   autoScroll: boolean;
   onToggleAutoScroll: () => void;
   onClear: () => void;
-  onCopyAll: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
 }
@@ -333,43 +332,33 @@ export const ConsoleToolbar: React.FC<ConsoleToolbarProps> = ({
   autoScroll,
   onToggleAutoScroll,
   onClear,
-  onCopyAll,
   searchQuery,
   onSearchChange,
 }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    onCopyAll();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '6px 12px',
+        padding: '5px 10px',
         backgroundColor: 'var(--color-surface)',
         borderBottom: '1px solid var(--color-border)',
         fontSize: '11px',
         gap: '8px',
-        flexWrap: 'wrap',
       }}
     >
-      {/* Search Bar */}
+      {/* Search Bar - Sleek & Compact */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
           backgroundColor: 'var(--color-surface-hover)',
-          borderRadius: '6px',
-          padding: '4px 8px',
+          borderRadius: '5px',
+          padding: '3px 8px',
           border: '1px solid var(--color-border)',
-          maxWidth: '220px',
+          maxWidth: '200px',
           flex: 1,
         }}
       >
@@ -378,7 +367,7 @@ export const ConsoleToolbar: React.FC<ConsoleToolbarProps> = ({
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Lọc log / tìm kiếm..."
+          placeholder="Lọc log..."
           style={{
             background: 'none',
             border: 'none',
@@ -398,73 +387,50 @@ export const ConsoleToolbar: React.FC<ConsoleToolbarProps> = ({
         )}
       </div>
 
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        {/* Toggle Auto-scroll */}
+      {/* Action Buttons: Minimalist Icons Only */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+        {/* Toggle Auto-scroll Icon */}
         <button
+          type="button"
           onClick={onToggleAutoScroll}
           className="btn-interactive"
-          title={autoScroll ? 'Tự cuộn đang bật' : 'Tự cuộn đang tắt'}
+          title={autoScroll ? 'Tự cuộn đang bật (Nhấn để tắt)' : 'Tự cuộn đang tắt (Nhấn để bật)'}
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '4px',
-            padding: '4px 8px',
+            justifyContent: 'center',
+            width: '26px',
+            height: '26px',
             borderRadius: '5px',
             backgroundColor: autoScroll ? 'var(--color-primary-muted)' : 'var(--color-surface-hover)',
             border: `1px solid ${autoScroll ? 'var(--color-primary)' : 'var(--color-border)'}`,
-            color: autoScroll ? 'var(--color-primary-light)' : 'var(--color-text-secondary)',
-            fontSize: '11px',
-            fontWeight: 500,
+            color: autoScroll ? 'var(--color-primary-light)' : 'var(--color-text-muted)',
             cursor: 'pointer',
           }}
         >
-          <ArrowDown size={12} />
-          <span>Auto-scroll</span>
+          <ArrowDown size={13} />
         </button>
 
-        {/* Copy All */}
+        {/* Clear Console Icon */}
         <button
-          onClick={handleCopy}
-          className="btn-interactive"
-          title="Sao chép toàn bộ log"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '4px 8px',
-            borderRadius: '5px',
-            backgroundColor: 'var(--color-surface-hover)',
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text)',
-            fontSize: '11px',
-            cursor: 'pointer',
-          }}
-        >
-          {copied ? <Check size={12} color="var(--color-success)" /> : <Copy size={12} />}
-          <span>{copied ? 'Đã chép' : 'Sao chép'}</span>
-        </button>
-
-        {/* Clear Console */}
-        <button
+          type="button"
           onClick={onClear}
           className="btn-interactive"
-          title="Xóa trắng màn hình log"
+          title="Xóa trắng màn hình console"
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '4px',
-            padding: '4px 8px',
+            justifyContent: 'center',
+            width: '26px',
+            height: '26px',
             borderRadius: '5px',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
             border: '1px solid rgba(239, 68, 68, 0.25)',
             color: 'var(--color-error)',
-            fontSize: '11px',
             cursor: 'pointer',
           }}
         >
-          <Trash2 size={12} />
-          <span>Clear</span>
+          <Trash2 size={13} />
         </button>
       </div>
     </div>

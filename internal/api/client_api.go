@@ -34,6 +34,14 @@ func (c *ClientAPI) UpdateCredentials(baseURL, token string) {
 	c.http.SetToken(token)
 }
 
+// GetLastLatencyMs returns the roundtrip latency of the last request
+func (c *ClientAPI) GetLastLatencyMs() int64 {
+	if c.http == nil {
+		return 0
+	}
+	return c.http.GetLastLatencyMs()
+}
+
 // --- Account ---
 
 // GetAccount retrieves the authenticated user's account

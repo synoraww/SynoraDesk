@@ -31,8 +31,8 @@ func main() {
 	windowTitle := "SynoraDesk"
 	width := 1400
 	height := 900
-	minWidth := 1024
-	minHeight := 700
+	minWidth := 0
+	minHeight := 0
 
 	if *detachedFlag {
 		app.detachedConfig = DetachedWindowConfig{
@@ -53,8 +53,6 @@ func main() {
 		}
 		width = 1260
 		height = 800
-		minWidth = 720
-		minHeight = 480
 	} else {
 		// Load persisted window dimensions if available
 		configDir, _ := os.UserConfigDir()
@@ -69,7 +67,7 @@ func main() {
 					IsMaximised bool `json:"is_maximised"`
 				}
 				if err := json.Unmarshal(data, &state); err == nil {
-					if state.Width >= minWidth && state.Height >= minHeight {
+					if state.Width > 0 && state.Height > 0 {
 						width = state.Width
 						height = state.Height
 					}

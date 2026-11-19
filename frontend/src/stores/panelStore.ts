@@ -55,6 +55,7 @@ interface PanelState {
   panelAccounts: Record<string, Account>;
   loading: boolean;
   error: string | null;
+  panelPingMs: number | null;
 
   // Actions
   setPanels: (panels: Panel[]) => void;
@@ -62,12 +63,15 @@ interface PanelState {
   setCurrentAccount: (account: Account | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setPanelPingMs: (ping: number | null) => void;
+  recordLatency: (durationMs: number) => void;
 
   // Async actions (call Go backend)
   fetchPanels: () => Promise<void>;
   fetchActivePanel: () => Promise<void>;
   fetchCurrentAccount: () => Promise<void>;
   fetchPanelAccount: (panelId: string) => Promise<Account | null>;
+  checkPanelPing: () => Promise<number | null>;
   addPanel: (input: PanelInput) => Promise<Panel>;
   updatePanel: (id: string, input: PanelInput) => Promise<Panel>;
   deletePanel: (id: string) => Promise<void>;
@@ -91,12 +95,40 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   panelAccounts: {},
   loading: false,
   error: null,
+  panelPingMs: null,
 
   setPanels: (panels) => set({ panels }),
   setActivePanel: (panel) => set({ activePanel: panel }),
   setCurrentAccount: (account) => set({ currentAccount: account }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
+  setPanelPingMs: (panelPingMs) => set({ panelPingMs }),
+  recordLatency: (durationMs) => {
+    if (typeof durationMs === 'number' && durationMs >= 0) {
+      set({ panelPingMs: Math.round(durationMs) });
+    }
+  },
+
+  checkPanelPing: async () => {
+    try {
+      // @ts-ignore
+      const app = window.go?.main?.App;
+      if (app?.PingActivePanel) {
+        const ping = await app.PingActivePanel();
+        const pingNum = typeof ping === 'number' ? Math.round(ping) : null;
+        set({ panelPingMs: pingNum });
+        return pingNum;
+      } else if (app?.GetActivePanelPing) {
+        const ping = await app.GetActivePanelPing();
+        const pingNum = typeof ping === 'number' && ping > 0 ? Math.round(ping) : null;
+        set({ panelPingMs: pingNum });
+        return pingNum;
+      }
+    } catch {
+      // Non-fatal if offline
+    }
+    return null;
+  },
 
   fetchPanels: async () => {
     set({ loading: true, error: null });
@@ -125,6 +157,7 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       set({ activePanel: panel });
       if (panel) {
         await get().fetchCurrentAccount();
+        get().checkPanelPing();
       }
     } catch (err: any) {
       set({ error: err.message || 'Failed to fetch active panel' });
@@ -208,6 +241,7 @@ export const usePanelStore = create<PanelState>((set, get) => ({
     await app.SwitchPanel(id);
     await get().fetchActivePanel();
     await get().fetchPanels();
+    get().checkPanelPing();
   },
 
   testConnection: async (id) => {

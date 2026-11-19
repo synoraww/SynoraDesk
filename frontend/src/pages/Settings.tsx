@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Settings,
   Shield,
+  ShieldCheck,
   Folder,
   Moon,
   Sun,
@@ -15,12 +16,16 @@ import {
   Trash2,
   Sliders,
   Sparkles,
+  Zap,
 } from 'lucide-react';
 import { useUIStore, AccentTheme } from '../stores/uiStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useI18n, Language } from '../i18n';
 import { SecuritySettingsCard } from '../components/security/SecuritySettingsCard';
 import { WallpaperCustomizerModal } from '../components/common/WallpaperCustomizerModal';
+import { SystemDiagnosticsModal } from '../components/common/SystemDiagnosticsModal';
+import { WelcomeModal } from '../components/common/WelcomeModal';
+import { APP_CONFIG } from '../config/version';
 
 // 5 Theme Accent Options matching user reference screenshot
 const ACCENT_OPTIONS: { id: AccentTheme; name: string; color: string; labelVi: string; labelEn: string }[] = [
@@ -61,6 +66,8 @@ export const SettingsPage: React.FC = () => {
     setTheme,
     accentTheme,
     setAccentTheme,
+    animationMode,
+    setAnimationMode,
     customBackground,
     selectAndApplyBackgroundImage,
     updateBackgroundSettings,
@@ -70,6 +77,8 @@ export const SettingsPage: React.FC = () => {
   const { language, setLanguage, t } = useI18n();
   const [dataDir, setDataDir] = useState<string>('Loading...');
   const [isWallpaperModalOpen, setIsWallpaperModalOpen] = useState(false);
+  const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
+  const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
 
   useEffect(() => {
     // @ts-ignore
@@ -329,6 +338,68 @@ export const SettingsPage: React.FC = () => {
                 <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('settings.lightThemeDesc')}</div>
               </div>
             </button>
+          </div>
+
+          {/* Animation Mode Controls */}
+          <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid var(--color-border)' }}>
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={14} color="var(--color-primary-light)" /> {t('settings.animationTitle')}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                {t('settings.animationSubtitle')}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setAnimationMode('full')}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: animationMode === 'full' ? 'var(--color-primary-muted)' : 'var(--color-surface-hover)',
+                  border: `1px solid ${animationMode === 'full' ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                  color: 'var(--color-text)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Sparkles size={16} color={animationMode === 'full' ? 'var(--color-primary-light)' : 'var(--color-text-muted)'} />
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600 }}>{t('settings.animFull')}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{t('settings.animFullDesc')}</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAnimationMode('light')}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: animationMode === 'light' ? 'var(--color-primary-muted)' : 'var(--color-surface-hover)',
+                  border: `1px solid ${animationMode === 'light' ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                  color: 'var(--color-text)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Zap size={16} color={animationMode === 'light' ? 'var(--color-primary-light)' : 'var(--color-text-muted)'} />
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600 }}>{t('settings.animLight')}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{t('settings.animLightDesc')}</div>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -655,6 +726,32 @@ export const SettingsPage: React.FC = () => {
             padding: '20px',
           }}
         > 
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+              {t('settings.securityTitle') || 'Bảo mật & Kiểm tra hệ thống'}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setIsDiagnosticsOpen(true)}
+              className="btn-interactive"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(34, 197, 94, 0.12)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                color: 'var(--color-success)',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <CheckCircle2 size={13} />
+              <span>{t('diagnostics.openDiagnosticsBtn') || 'Kiểm tra công cụ & Báo lỗi'}</span>
+            </button>
+          </div>
 
           <div
             style={{
@@ -719,7 +816,7 @@ export const SettingsPage: React.FC = () => {
         {/* Security & App Lock Card */}
         <SecuritySettingsCard />
 
-        {/* About Card */}
+        {/* About & Policies Card */}
         <div
           style={{
             backgroundColor: 'var(--color-surface)',
@@ -728,17 +825,58 @@ export const SettingsPage: React.FC = () => {
             padding: '20px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <Info size={16} color="var(--color-primary-light)" />
-            <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)' }}>
-              {t('settings.aboutTitle')}
-            </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Info size={16} color="var(--color-primary-light)" />
+              <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                {t('settings.aboutTitle')}
+              </h2>
+            </div>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                backgroundColor: 'var(--color-primary-muted)',
+                color: 'var(--color-primary-light)',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                border: '1px solid var(--color-primary-glow)',
+              }}
+            >
+              v{APP_CONFIG.version}
+            </span>
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '12px' }}>
+
+          <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '14px' }}>
             {t('settings.aboutDesc')}
           </p>
+
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
+            <button
+              type="button"
+              onClick={() => setIsWelcomeModalOpen(true)}
+              className="btn-interactive"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 12px',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(34, 197, 94, 0.12)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                color: '#22C55E',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <ShieldCheck size={14} />
+              <span>{t('welcome.revisitTerms') || 'Điều khoản & Cam kết dữ liệu'}</span>
+            </button>
+          </div>
+
           <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-            <div>{t('settings.version')}</div>
+            <div>SynoraDesk v{APP_CONFIG.version} (Pterodactyl Modern Desktop Client)</div>
             <div style={{ fontSize: '11px', marginTop: '2px' }}>{t('settings.builtWith')}</div>
           </div>
         </div>
@@ -747,6 +885,19 @@ export const SettingsPage: React.FC = () => {
         <WallpaperCustomizerModal
           isOpen={isWallpaperModalOpen}
           onClose={() => setIsWallpaperModalOpen(false)}
+        />
+
+        {/* System Diagnostics & Bug Reporting Modal */}
+        <SystemDiagnosticsModal
+          isOpen={isDiagnosticsOpen}
+          onClose={() => setIsDiagnosticsOpen(false)}
+        />
+
+        {/* Welcome & Data Privacy Modal */}
+        <WelcomeModal
+          isOpen={isWelcomeModalOpen}
+          onClose={() => setIsWelcomeModalOpen(false)}
+          canDismissWithoutAccept={true}
         />
       </div>
     </div>

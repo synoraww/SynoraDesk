@@ -3,6 +3,7 @@ import { create } from 'zustand';
 export type ThemeMode = 'dark' | 'light';
 export type AccentTheme = 'blue' | 'green' | 'purple' | 'amber' | 'rose';
 export type WallpaperFitMode = 'cover' | 'contain' | 'custom';
+export type AnimationMode = 'full' | 'light';
 
 export interface CustomBackgroundState {
   enabled: boolean;
@@ -34,6 +35,10 @@ interface UIState {
   // Accent Color Theme (Blue, Green, Purple, Amber, Rose)
   accentTheme: AccentTheme;
   setAccentTheme: (accent: AccentTheme) => void;
+
+  // Animation Mode (Full, Light)
+  animationMode: AnimationMode;
+  setAnimationMode: (mode: AnimationMode) => void;
 
   // Custom Background Wallpaper
   customBackground: CustomBackgroundState;
@@ -78,6 +83,7 @@ let notificationCounter = 0;
 // Initialize persisted values from localStorage
 const savedTheme = (localStorage.getItem('pterodesk_theme') as ThemeMode) || 'dark';
 const savedAccent = (localStorage.getItem('pterodesk_accent_theme') as AccentTheme) || 'blue';
+const savedAnimation = (localStorage.getItem('pterodesk_animation_mode') as AnimationMode) || 'full';
 const savedBgCached = localStorage.getItem('pterodesk_custom_bg_cache');
 
 let initialCustomBg: CustomBackgroundState = {
@@ -107,6 +113,7 @@ if (savedBgCached) {
 if (typeof document !== 'undefined') {
   document.documentElement.setAttribute('data-theme', savedTheme);
   document.documentElement.setAttribute('data-accent', savedAccent);
+  document.documentElement.setAttribute('data-animation', savedAnimation);
   if (initialCustomBg.enabled && initialCustomBg.dataUrl) {
     document.documentElement.setAttribute('data-has-custom-bg', 'true');
   } else {
@@ -133,6 +140,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ accentTheme });
     localStorage.setItem('pterodesk_accent_theme', accentTheme);
     document.documentElement.setAttribute('data-accent', accentTheme);
+  },
+
+  // Animation Mode (Full, Light)
+  animationMode: savedAnimation,
+  setAnimationMode: (animationMode) => {
+    set({ animationMode });
+    localStorage.setItem('pterodesk_animation_mode', animationMode);
+    document.documentElement.setAttribute('data-animation', animationMode);
   },
 
   // Custom Background

@@ -127,7 +127,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               gap: '10px',
             }}
           >
-            Dashboard
+            {t('dashboard.title')}
             <span
               style={{
                 fontSize: '12px',
@@ -143,11 +143,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
               }}
             >
               <PanelFavicon url={activePanel.url} name={activePanel.name} size={14} />
-              Connected to {activePanel.name}
+              {t('dashboard.connectedTo', { name: activePanel.name })}
             </span>
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-            Infrastructure overview and quick server access
+            {t('dashboard.subtitle')}
           </p>
         </div>
 
@@ -157,6 +157,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             fetchDashboardStats();
             loadActivitiesAndRecent();
           }}
+          className="btn-interactive"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -172,7 +173,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }}
         >
           <RefreshCw size={13} />
-          Refresh
+          {t('dashboard.refresh')}
         </button>
       </div>
 
@@ -207,7 +208,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-              Total Servers
+              {t('dashboard.totalServers')}
             </span>
             <Server size={16} color="var(--color-primary-light)" />
           </div>
@@ -215,7 +216,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {serversLoading ? '...' : servers.length}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-            Accessible via Client API
+            {t('dashboard.totalServersDesc')}
           </div>
         </div>
 
@@ -241,7 +242,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-              Online / Running
+              {t('dashboard.runningServers')}
             </span>
             <span
               style={{
@@ -257,7 +258,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {serversLoading ? '...' : runningCount}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-            Active server instances
+            {t('dashboard.runningServersDesc')}
           </div>
         </div>
 
@@ -283,7 +284,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-              Offline / Stopped
+              {t('dashboard.offlineServers')}
             </span>
             <span
               style={{
@@ -298,7 +299,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {serversLoading ? '...' : offlineCount}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-            Stopped or suspended
+            {t('dashboard.offlineServersDesc')}
           </div>
         </div>
 
@@ -324,7 +325,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-              Nodes Managed
+              {t('dashboard.nodesManaged')}
             </span>
             <Layers size={16} color="var(--color-warning)" />
           </div>
@@ -332,7 +333,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {totalNodes > 0 ? totalNodes : activePanel.hasAppKey ? '0' : '—'}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-            {activePanel.hasAppKey ? 'Wings daemon hosts' : 'Requires Application API'}
+            {activePanel.hasAppKey ? t('dashboard.nodesWingsDesc') : t('dashboard.nodesAppKeyRequired')}
           </div>
         </div>
       </div>
@@ -365,11 +366,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Server size={16} color="var(--color-primary-light)" />
               <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)' }}>
-                Servers Overview
+                {t('dashboard.serversOverview')}
               </h2>
             </div>
             <button
               onClick={() => onNavigateTab('servers')}
+              className="btn-interactive"
               style={{
                 background: 'none',
                 border: 'none',
@@ -382,7 +384,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 gap: '4px',
               }}
             >
-              View All <ArrowUpRight size={13} />
+              {t('dashboard.viewAll')} <ArrowUpRight size={13} />
             </button>
           </div>
 
@@ -393,7 +395,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           ) : servers.length === 0 ? (
             <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '13px' }}>
-              No servers found on this panel
+              {t('dashboard.noServersFound')}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -460,7 +462,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       >
                         <span>{s.node}</span>
                         <span>•</span>
-                        <span>{s.limits.memory > 0 ? `${s.limits.memory} MB` : 'Unlimited RAM'}</span>
+                        <span>{s.limits.memory > 0 ? `${s.limits.memory} MB` : t('dashboard.unlimitedRam')}</span>
                       </div>
                     </div>
                   </div>
@@ -503,11 +505,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Activity size={16} color="var(--color-primary-light)" />
               <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)' }}>
-                Recent Activities
+                {t('dashboard.recentActivities')}
               </h2>
             </div>
             <button
               onClick={() => onNavigateTab('activities')}
+              className="btn-interactive"
               style={{
                 background: 'none',
                 border: 'none',
@@ -520,7 +523,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 gap: '4px',
               }}
             >
-              View All <ArrowUpRight size={13} />
+              {t('dashboard.viewAll')} <ArrowUpRight size={13} />
             </button>
           </div>
 
@@ -532,7 +535,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           ) : activities.length === 0 ? (
             <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '13px' }}>
-              No recent activity recorded yet
+              {t('dashboard.noRecentActivities')}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

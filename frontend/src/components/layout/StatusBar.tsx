@@ -1,13 +1,15 @@
-import React from 'react';
-import { Wifi, WifiOff, CheckCircle2, ShieldCheck, Database as DbIcon, Server } from 'lucide-react';
+import React, { useState } from 'react';
+import { Wifi, WifiOff, CheckCircle2, ShieldCheck, Database as DbIcon, Server, Wrench } from 'lucide-react';
 import { usePanelStore } from '../../stores/panelStore';
 import { useServerStore } from '../../stores/serverStore';
 import { useI18n } from '../../i18n';
+import { SystemDiagnosticsModal } from '../common/SystemDiagnosticsModal';
 
 export const StatusBar: React.FC = () => {
-  const { activePanel } = usePanelStore();
+  const { activePanel, panelPingMs } = usePanelStore();
   const { servers, dashboardStats } = useServerStore();
   const { t } = useI18n();
+  const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
 
   const totalServers = servers.length;
   const runningServers = dashboardStats?.runningServers ?? 0;
@@ -59,6 +61,21 @@ export const StatusBar: React.FC = () => {
                   APP API
                 </span>
               )}
+              {panelPingMs !== null && (
+                <span
+                  title={`${t('ping.latency') || 'Độ trễ Panel'}: ${panelPingMs} ms`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '10px',
+                    color: panelPingMs < 150 ? '#22C55E' : panelPingMs < 350 ? '#EAB308' : '#EF4444',
+                  }}
+                >
+                  • {panelPingMs}ms
+                </span>
+              )}
             </>
           ) : (
             <>
@@ -94,20 +111,45 @@ export const StatusBar: React.FC = () => {
         </div>
       )}
 
-      {/* Right: Security & App Info */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--color-success)' }}
-          title={t('layout.dpapiTitle')}
+      {/* Right: Security & App Diagnostics */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <button
+          type="button"
+          onClick={() => setIsDiagnosticsOpen(true)}
+          title="Kiểm tra công cụ, DPAPI, phần mềm và chẩn đoán báo lỗi"
+          className="btn-interactive"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            color: 'var(--color-success)',
+            background: 'none',
+            border: 'none',
+            fontSize: '11px',
+            cursor: 'pointer',
+            padding: '2px 6px',
+            borderRadius: '4px',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(34, 197, 94, 0.1)')}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
         >
           <ShieldCheck size={12} />
           <span>{t('layout.dpapiEncrypted')}</span>
-        </div>
+          <span style={{ fontSize: '9px', backgroundColor: 'rgba(34, 197, 94, 0.2)', padding: '1px 4px', borderRadius: '3px' }}>
+            {t('diagnostics.badge')}
+          </span>
+        </button>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <DbIcon size={11} />
           <span>{t('common.sqliteWal')}</span>
         </div>
       </div>
+
+      <SystemDiagnosticsModal
+        isOpen={isDiagnosticsOpen}
+        onClose={() => setIsDiagnosticsOpen(false)}
+      />
     </footer>
   );
 };

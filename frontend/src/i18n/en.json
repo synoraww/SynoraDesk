@@ -44,12 +44,15 @@
     "unlimited": "Unlimited",
     "back": "Back",
     "manage": "Manage",
-    "retry": "Retry"
+    "retry": "Retry",
+    "reset": "Reset",
+    "done": "Done & Close",
+    "detachedBadge": "Detached Window"
   },
   "nav": {
     "servers": "Servers",
     "accountManager": "Account Manager",
-    "ide": "IDE Studio",
+    "ide": "IDE",
     "activity": "Activity",
     "settings": "App Settings",
     "console": "Console",
@@ -120,7 +123,26 @@
   "dashboard": {
     "noPanelTitle": "No Pterodactyl Panel connected",
     "noPanelDesc": "Connect your Pterodactyl Panel using Client API or Application API credentials to start managing your game servers and infrastructure.",
-    "addFirstPanel": "Add first panel"
+    "addFirstPanel": "Add first panel",
+    "title": "Dashboard",
+    "connectedTo": "Connected to {{name}}",
+    "subtitle": "Infrastructure overview and quick server access",
+    "refresh": "Refresh",
+    "totalServers": "Total Servers",
+    "totalServersDesc": "Accessible via Client API",
+    "runningServers": "Online / Running",
+    "runningServersDesc": "Active server instances",
+    "offlineServers": "Offline / Stopped",
+    "offlineServersDesc": "Stopped or suspended",
+    "nodesManaged": "Nodes Managed",
+    "nodesWingsDesc": "Wings daemon hosts",
+    "nodesAppKeyRequired": "Requires Application API",
+    "serversOverview": "Servers Overview",
+    "viewAll": "View All",
+    "noServersFound": "No servers found on this panel",
+    "unlimitedRam": "Unlimited RAM",
+    "recentActivities": "Recent Activities",
+    "noRecentActivities": "No recent activity recorded yet"
   },
   "server": {
     "status": {
@@ -191,7 +213,9 @@
     "reinstallModalTitle": "Confirm Server Reinstallation",
     "reinstallModalWarning": "This action will reset or overwrite default server files!",
     "reinstallModalInstruction": "To confirm, please type \"reinstall\" in the box below:",
-    "reinstallConfirmBtn": "I understand the risks, reinstall"
+    "reinstallConfirmPrompt": "Type \"reinstall\" to confirm:",
+    "reinstallConfirmBtn": "I understand the risks, reinstall",
+    "confirmReinstall": "Confirm Reinstall"
   },
   "startupTab": {
     "title": "Startup & Environment Variables",
@@ -294,7 +318,14 @@
     "aboutDesc": "Designed for professional server administrators and game host managers.",
     "applicationDirectory": "Application directory:",
     "version": "PteroDesk v1.0.0 (Native Windows x64 Desktop Application)",
-    "builtWith": "Built with Go + Wails v2 + React 19 + Meta Astryx Design System"
+    "builtWith": "Built with Go + Wails v2 + React 19 + Meta Astryx Design System",
+    "animationTitle": "Motion & Animations",
+    "animationSubtitle": "Adjust between smooth animations or lightweight reduced motion",
+    "animFull": "Full (Smooth)",
+    "animFullDesc": "Full motion effects and transitions",
+    "animLight": "Light (Reduced)",
+    "animLightDesc": "Instant response, reduced system load",
+    "securityTitle": "Security & Diagnostics"
   },
   "wallpaper": {
     "modalTitle": "Customize Wallpaper & Alignment",
@@ -500,17 +531,50 @@
       "activity_read": "Allows viewing server activity logs."
     },
     "categories": {
-      "control": { "title": "Control / Power & Console", "description": "Control server power and send console commands." },
-      "user": { "title": "Users / Subuser management", "description": "Manage other server subusers. Users cannot edit their own account or grant permissions they do not have." },
-      "file": { "title": "Files & SFTP", "description": "Manage this server's files and directories." },
-      "plugin": { "title": "Plugins & add-ons", "description": "View and install Minecraft plugins." },
-      "backup": { "title": "Backups", "description": "Create and manage server backups." },
-      "allocation": { "title": "Network allocations", "description": "Manage this server's port allocations." },
-      "startup": { "title": "Startup & Docker", "description": "View and manage server startup settings." },
-      "database": { "title": "Databases", "description": "Manage this server's databases." },
-      "schedule": { "title": "Schedules & automation", "description": "Manage schedules and scheduled tasks." },
-      "settings": { "title": "Settings", "description": "Manage this server's settings." },
-      "activity": { "title": "Activity logs", "description": "View this server's activity logs." }
+      "control": {
+        "title": "Control / Power & Console",
+        "description": "Control server power and send console commands."
+      },
+      "user": {
+        "title": "Users / Subuser management",
+        "description": "Manage other server subusers. Users cannot edit their own account or grant permissions they do not have."
+      },
+      "file": {
+        "title": "Files & SFTP",
+        "description": "Manage this server's files and directories."
+      },
+      "plugin": {
+        "title": "Plugins & add-ons",
+        "description": "View and install Minecraft plugins."
+      },
+      "backup": {
+        "title": "Backups",
+        "description": "Create and manage server backups."
+      },
+      "allocation": {
+        "title": "Network allocations",
+        "description": "Manage this server's port allocations."
+      },
+      "startup": {
+        "title": "Startup & Docker",
+        "description": "View and manage server startup settings."
+      },
+      "database": {
+        "title": "Databases",
+        "description": "Manage this server's databases."
+      },
+      "schedule": {
+        "title": "Schedules & automation",
+        "description": "Manage schedules and scheduled tasks."
+      },
+      "settings": {
+        "title": "Settings",
+        "description": "Manage this server's settings."
+      },
+      "activity": {
+        "title": "Activity logs",
+        "description": "View this server's activity logs."
+      }
     }
   },
   "serverIDE": {
@@ -533,7 +597,7 @@
     "splitTerminalVertical": "Place terminal beside the editor",
     "splitTerminalBottom": "Place terminal below the editor",
     "clearLog": "Clear console log",
-    "clearLogButton": "",
+    "clearLogButton": "Clear logs",
     "collapse": "Collapse",
     "expand": "Expand",
     "consolePlaceholder": "Enter a console command... (Enter to send, ↑/↓ for command history)",
@@ -691,7 +755,7 @@
     "copyAddress": "Copy server address",
     "tabConsole": "Console",
     "tabFiles": "Files",
-    "tabIde": "IDE Studio",
+    "tabIde": "IDE",
     "tabDatabases": "Databases",
     "tabBackups": "Backups",
     "tabSubusers": "Users",
@@ -699,7 +763,7 @@
     "tabStartup": "Startup",
     "tabSettings": "Settings",
     "clearConsole": "Clear console log",
-    "consoleCommandPlaceholder": "Enter a server console command... (Use ↑/↓ to recall commands)",
+    "consoleCommandPlaceholder": "Enter a server console command...",
     "upload": "Upload",
     "newFolder": "New folder",
     "newFile": "New file",
@@ -833,7 +897,8 @@
     "batchDeleteConfirm": "Are you sure you want to permanently delete {count} selected items?",
     "batchDeleteMessage": "Removed {count} items.",
     "addressCopied": "Copied {address} to clipboard.",
-    "keyCopied": "Copied {key}"
+    "keyCopied": "Copied {key}",
+    "databases": "Databases"
   },
   "account": {
     "clientUser": "Client user",
@@ -1051,7 +1116,13 @@
     "lockedOutTitle": "Security Lockout",
     "lockedOutDesc": "Exceeded {max} failed attempts. Local protected countdown active. Please wait for the timer to finish.",
     "autoWipeTitle": "Auto-Wipe Application Data (Optional)",
-    "autoWipeDesc": "Permanently erases SQLite database and API credentials if repeated failed attempts are detected."
+    "autoWipeDesc": "Permanently erases SQLite database and API credentials if repeated failed attempts are detected.",
+    "lockedBadge": "Locked",
+    "passwordPlaceholder": "Enter password...",
+    "incorrectCurrentPasscode": "Current passcode is incorrect",
+    "passcodeMismatch": "Confirmation passcode does not match",
+    "disableLockTitle": "Disable App Lock",
+    "setupLockTitle": "Setup Lock"
   },
   "updates": {
     "title": "Check for Updates",
@@ -1061,5 +1132,58 @@
     "recentImprovements": "Key New Features (v1.02A)",
     "checking": "Checking...",
     "checkAgain": "Check Again"
+  },
+  "diagnostics": {
+    "title": "System Diagnostics & Health Check",
+    "subtitle": "Windows DPAPI, database, runtime resources and configuration",
+    "badge": "Diagnostics",
+    "scanning": "Analyzing system configuration...",
+    "statusHealthy": "Operational",
+    "statusError": "Issue Detected",
+    "copyReport": "Copy Diagnostic Report",
+    "copied": "Report Copied",
+    "reportCopied": "System diagnostic report copied to clipboard",
+    "reportOnGithub": "Report Issue on GitHub",
+    "openDiagnosticsBtn": "Tool Check & Bug Report"
+  },
+  "updater": {
+    "errorTitle": "Version Check Error",
+    "errorFetchFailed": "Unable to retrieve version info from GitHub: {error}",
+    "retryBtn": "Retry Check",
+    "openReleasesPage": "Open GitHub Releases",
+    "noReleasesFound": "No releases found on GitHub repository."
+  },
+  "ping": {
+    "latency": "Latency to Panel",
+    "checking": "Checking connection...",
+    "offline": "Offline"
+  },
+  "welcome": {
+    "title": "Welcome to SynoraDesk",
+    "subtitle": "Modern open-source desktop client for Pterodactyl Panel",
+    "tagline": "Centralized server management, blazing performance, and zero sensitive data collection",
+    "badgeOpenSource": "Open Source",
+    "badgeLocalFirst": "Local First",
+    "badgeZeroTelemetry": "Zero Telemetry",
+    "featPanelsTitle": "Multi-Panel & Accounts",
+    "featPanelsDesc": "Connect unlimited Pterodactyl Panels simultaneously with safe Client API & Application API auth.",
+    "featToolsTitle": "Built-in Powerful Tools",
+    "featToolsDesc": "Integrated drag-and-drop SFTP Explorer, Monaco Code Editor, MySQL/PostgreSQL Database Manager and real-time Console.",
+    "featSecurityTitle": "Hardware-Grade Encryption",
+    "featSecurityDesc": "Secured by Windows Data Protection API (DPAPI) + AES-256-GCM, plus App Lock with PIN or Passcode.",
+    "termsTitle": "Terms of Service & Data Privacy Commitment",
+    "termsP1": "SynoraDesk is built entirely non-profit and open-source. We strictly respect your privacy and complete ownership of your data.",
+    "termsCommitmentHeading": "Commitment NOT to collect sensitive data:",
+    "termsCommitment1": "Zero external storage of API keys, passwords, database credentials, or tokens outside your personal computer.",
+    "termsCommitment2": "All connection info and settings are locally encrypted with Windows DPAPI and stored in local SQLite.",
+    "termsCommitment3": "No user data transmission, no telemetry tracking, zero analytics and zero third-party ads.",
+    "termsCommitment4": "All network traffic occurs directly between your client and the Pterodactyl Panel host you configure.",
+    "checkboxLabel": "I have read, understood, and agree to SynoraDesk's Terms of Service and Data Privacy Commitment.",
+    "getStartedBtn": "Get Started with SynoraDesk",
+    "resetDataBtn": "Wipe App Data",
+    "resetConfirmTitle": "Confirm Complete Data Wipe",
+    "resetConfirmDesc": "This action will permanently delete all panel profiles, configurations, local SQLite database, and DPAPI encryption keys on this machine. Are you sure you want to proceed?",
+    "revisitTerms": "Review Terms & Privacy Commitment",
+    "wipeDataSuccess": "All application data wiped successfully"
   }
 }

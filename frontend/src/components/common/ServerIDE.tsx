@@ -725,18 +725,17 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '3px',
-                padding: '2px 6px',
+                justifyContent: 'center',
+                width: '24px',
+                height: '22px',
                 borderRadius: '3px',
                 backgroundColor: 'transparent',
                 border: '1px solid var(--color-border)',
                 color: 'var(--color-text-secondary)',
-                fontSize: '10px',
                 cursor: 'pointer',
               }}
             >
               {isHorizontal ? <Columns2 size={12} /> : <Rows2 size={12} />}
-              <span>{isHorizontal ? 'Chia đôi đứng' : 'Chia ngang'}</span>
             </button>
 
             <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
@@ -1282,7 +1281,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                 >
                   <FolderTree size={44} strokeWidth={1.2} color="var(--color-border)" />
                   <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)' }}>
-                    Server IDE Studio
+                    Server IDE
                   </div>
                   <div style={{ fontSize: '12px', maxWidth: '340px', textAlign: 'center' }}>
                     Kết nối trực tiếp API hệ thống tệp và bảng điều khiển container của <strong>{serverName}</strong>.

@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -1873,4 +1875,227 @@ func (a *App) logActivity(panelID, panelName, serverID, action, result, errMsg s
 		Result:    result,
 		Error:     errMsg,
 	})
+}
+
+// SystemDiagnostics holds diagnostic info for tooling, configuration, and bug reporting
+type SystemDiagnostics struct {
+	AppVersion        string  `json:"appVersion"`
+	OS                string  `json:"os"`
+	Arch              string  `json:"arch"`
+	GoVersion         string  `json:"goVersion"`
+	AppDataDir        string  `json:"appDataDir"`
+	DatabasePath      string  `json:"databasePath"`
+	DatabaseSizeBytes int64   `json:"databaseSizeBytes"`
+	DatabaseWALMode   bool    `json:"databaseWalMode"`
+	PanelsCount       int     `json:"panelsCount"`
+	ActivePanelName   string  `json:"activePanelName"`
+	DPAPIActive       bool    `json:"dpapiActive"`
+	DPAPITestPassed   bool    `json:"dpapiTestPassed"`
+	DPAPILatencyMs    float64 `json:"dpapiLatencyMs"`
+	SecurityLockout   bool    `json:"securityLockout"`
+	AllocatedMemMB    float64 `json:"allocatedMemMb"`
+	TotalAllocMemMB   float64 `json:"totalAllocMemMb"`
+	GoroutinesCount   int     `json:"goroutinesCount"`
+	Timestamp         string  `json:"timestamp"`
+}
+
+// GetSystemDiagnostics performs a complete system, security, and storage health check
+func (a *App) GetSystemDiagnostics() (*SystemDiagnostics, error) {
+	var m goruntime.MemStats
+	goruntime.ReadMemStats(&m)
+
+	dbPath := filepath.Join(a.appDataDir, "data", "pterodesk.db")
+	var dbSize int64
+	if fi, err := os.Stat(dbPath); err == nil {
+		dbSize = fi.Size()
+	}
+
+	panelsCount := 0
+	activePanelName := "None"
+	if a.panelManager != nil {
+		if active, err := a.panelManager.GetActivePanel(); err == nil && active != nil {
+			activePanelName = active.Name
+		}
+		if panels, err := a.panelManager.GetAllPanels(); err == nil {
+			panelsCount = len(panels)
+		}
+	}
+
+	// In-memory test of Windows DPAPI
+	start := time.Now()
+	testPayload := "synoradesk_diagnostic_dpapi_verify_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	dpapiActive := a.credentials != nil
+	dpapiPassed := false
+	if a.credentials != nil {
+		if enc, err := a.credentials.EncryptString(testPayload); err == nil {
+			if dec, err2 := a.credentials.DecryptString(enc); err2 == nil && dec == testPayload {
+				dpapiPassed = true
+			}
+		}
+	}
+	dpapiLatency := float64(time.Since(start).Microseconds()) / 1000.0
+
+	lockoutActive := false
+	if a.lockoutManager != nil {
+		status := a.lockoutManager.GetStatus()
+		lockoutActive = status.IsLockedOut
+	}
+
+	return &SystemDiagnostics{
+		AppVersion:        AppVersion,
+		OS:                goruntime.GOOS,
+		Arch:              goruntime.GOARCH,
+		GoVersion:         goruntime.Version(),
+		AppDataDir:        a.appDataDir,
+		DatabasePath:      dbPath,
+		DatabaseSizeBytes: dbSize,
+		DatabaseWALMode:   true,
+		PanelsCount:       panelsCount,
+		ActivePanelName:   activePanelName,
+		DPAPIActive:       dpapiActive,
+		DPAPITestPassed:   dpapiPassed,
+		DPAPILatencyMs:    dpapiLatency,
+		SecurityLockout:   lockoutActive,
+		AllocatedMemMB:    float64(m.Alloc) / (1024 * 1024),
+		TotalAllocMemMB:   float64(m.TotalAlloc) / (1024 * 1024),
+		GoroutinesCount:   goruntime.NumGoroutine(),
+		Timestamp:         time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+// GitHubReleaseAsset holds asset download info
+type GitHubReleaseAsset struct {
+	Name          string `json:"name"`
+	Size          int64  `json:"size"`
+	DownloadURL   string `json:"downloadUrl"`
+	DownloadCount int    `json:"downloadCount"`
+}
+
+// GitHubReleaseInfo holds release details for auto-updater
+type GitHubReleaseInfo struct {
+	TagName        string               `json:"tagName"`
+	Name           string               `json:"name"`
+	Body           string               `json:"body"`
+	Prerelease     bool                 `json:"prerelease"`
+	PublishedAt    string               `json:"publishedAt"`
+	HTMLURL        string               `json:"htmlUrl"`
+	HasUpdate      bool                 `json:"hasUpdate"`
+	CurrentVersion string               `json:"currentVersion"`
+	Assets         []GitHubReleaseAsset `json:"assets"`
+}
+
+// CheckGitHubUpdates queries GitHub releases with support for stable & pre-release channels
+func (a *App) CheckGitHubUpdates(includePrerelease bool) (*GitHubReleaseInfo, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases", AppGitHubRepo)
+	req, err := http.NewRequestWithContext(a.ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("lỗi khởi tạo yêu cầu kiểm tra cập nhật: %w", err)
+	}
+	req.Header.Set("User-Agent", fmt.Sprintf("%s-Updater/%s", AppName, AppVersion))
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("không thể kết nối tới máy chủ GitHub: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("không thể lấy thông tin phiên bản từ GitHub (mã trạng thái: %d)", resp.StatusCode)
+	}
+
+	type ghAsset struct {
+		Name               string `json:"name"`
+		Size               int64  `json:"size"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+		DownloadCount      int    `json:"download_count"`
+	}
+	type ghRelease struct {
+		TagName     string    `json:"tag_name"`
+		Name        string    `json:"name"`
+		Body        string    `json:"body"`
+		Prerelease  bool      `json:"prerelease"`
+		PublishedAt string    `json:"published_at"`
+		HTMLURL     string    `json:"html_url"`
+		Assets      []ghAsset `json:"assets"`
+	}
+
+	var releases []ghRelease
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return nil, fmt.Errorf("lỗi giải mã dữ liệu release: %w", err)
+	}
+
+	if len(releases) == 0 {
+		return nil, fmt.Errorf("không tìm thấy bản phát hành nào trên kho lưu trữ GitHub")
+	}
+
+	// Filter by channel
+	var target *ghRelease
+	if includePrerelease {
+		target = &releases[0]
+	} else {
+		for i := range releases {
+			if !releases[i].Prerelease {
+				target = &releases[i]
+				break
+			}
+		}
+	}
+
+	if target == nil {
+		return nil, fmt.Errorf("không tìm thấy bản phát hành chính thức (stable) nào trên GitHub")
+	}
+
+	currentVer := AppVersion
+	remoteVer := strings.TrimPrefix(target.TagName, "v")
+	hasUpdate := remoteVer != currentVer && target.TagName != "v"+currentVer
+
+	var assets []GitHubReleaseAsset
+	for _, as := range target.Assets {
+		assets = append(assets, GitHubReleaseAsset{
+			Name:          as.Name,
+			Size:          as.Size,
+			DownloadURL:   as.BrowserDownloadURL,
+			DownloadCount: as.DownloadCount,
+		})
+	}
+
+	return &GitHubReleaseInfo{
+		TagName:        target.TagName,
+		Name:           target.Name,
+		Body:           target.Body,
+		Prerelease:     target.Prerelease,
+		PublishedAt:    target.PublishedAt,
+		HTMLURL:        target.HTMLURL,
+		HasUpdate:      hasUpdate,
+		CurrentVersion: currentVer,
+		Assets:         assets,
+	}, nil
+}
+
+// GetActivePanelPing returns the ping/latency in milliseconds from the client to the active panel
+func (a *App) GetActivePanelPing() int64 {
+	if a.panelManager == nil {
+		return 0
+	}
+	return a.panelManager.GetActivePanelLatencyMs()
+}
+
+// PingActivePanel sends a lightweight ping to the active panel and returns latency in ms
+func (a *App) PingActivePanel() (int64, error) {
+	if a.panelManager == nil {
+		return 0, fmt.Errorf("bộ quản lý panel chưa khởi tạo")
+	}
+	client, err := a.panelManager.GetClientAPI()
+	if err != nil {
+		return 0, err
+	}
+	start := time.Now()
+	_, err = client.GetAccount(a.ctx)
+	elapsed := time.Since(start).Milliseconds()
+	if err != nil {
+		return elapsed, err
+	}
+	return elapsed, nil
 }

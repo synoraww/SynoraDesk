@@ -25,7 +25,7 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab }) => {
   const { theme, toggleTheme } = useUIStore();
-  const { panels, activePanel, currentAccount, panelAccounts, switchPanel } = usePanelStore();
+  const { panels, activePanel, currentAccount, panelAccounts, switchPanel, panelPingMs, checkPanelPing } = usePanelStore();
   const { activeTabId, updateTab } = useWorkspaceStore();
   const { fetchServers, fetchDashboardStats } = useServerStore();
   const { t } = useI18n();
@@ -36,7 +36,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([fetchServers(), fetchDashboardStats()]);
+      await Promise.all([fetchServers(), fetchDashboardStats(), checkPanelPing()]);
     } finally {
       setTimeout(() => setRefreshing(false), 400);
     }
@@ -247,6 +247,52 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab 
               </span>
             )}
           </div>
+        )}
+
+        {/* Real-time Panel Ping (ms) Latency Indicator */}
+        {activePanel && (
+          <button
+            type="button"
+            onClick={() => checkPanelPing()}
+            title={panelPingMs !== null ? `${t('ping.latency') || 'Độ trễ Panel'}: ${panelPingMs} ms (Click để kiểm tra lại)` : (t('ping.checking') || 'Đang kiểm tra kết nối...')}
+            className="btn-interactive"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '3px 8px',
+              borderRadius: '5px',
+              backgroundColor: 'var(--color-surface-hover)',
+              border: '1px solid var(--color-border)',
+              fontSize: '11px',
+              fontFamily: 'var(--font-mono)',
+              cursor: 'pointer',
+              color: 'var(--color-text-secondary)',
+            }}
+          >
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor:
+                  panelPingMs === null
+                    ? 'var(--color-text-muted)'
+                    : panelPingMs < 150
+                    ? '#22C55E'
+                    : panelPingMs < 350
+                    ? '#EAB308'
+                    : '#EF4444',
+                boxShadow:
+                  panelPingMs !== null && panelPingMs < 150
+                    ? '0 0 6px rgba(34, 197, 94, 0.6)'
+                    : 'none',
+              }}
+            />
+            <span style={{ fontWeight: 600 }}>
+              {panelPingMs !== null ? `${panelPingMs} ms` : '-- ms'}
+            </span>
+          </button>
         )}
       </div>
 

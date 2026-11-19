@@ -4,6 +4,7 @@ import { WindowMinimise, WindowToggleMaximise, Quit } from '../../../wailsjs/run
 import { useSecurityStore } from '../../stores/securityStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useI18n } from '../../i18n';
+import { APP_CONFIG } from '../../config/version';
 import logo from '../../assets/images/logo-universal.png';
 
 interface CustomTitleBarProps {
@@ -66,7 +67,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
             letterSpacing: '0.02em',
           }}
         >
-          {isDetached ? (t('common.detachedBadge') || 'Cửa sổ phụ') : 'v1.02A'}
+          {isDetached ? (t('common.detachedBadge') || 'Cửa sổ phụ') : `v${APP_CONFIG.version}`}
         </span>
       </div>
 

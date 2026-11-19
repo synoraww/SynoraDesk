@@ -28,6 +28,7 @@ type HTTPClient struct {
 	httpClient     *http.Client
 	mu             sync.RWMutex
 	rateLimitReset time.Time
+	lastLatencyMs  int64
 }
 
 // NewHTTPClient creates a new HTTP client with connection pooling
@@ -70,6 +71,13 @@ func (c *HTTPClient) SetBaseURL(url string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.config.BaseURL = strings.TrimRight(url, "/")
+}
+
+// GetLastLatencyMs returns the roundtrip latency in milliseconds of the last completed request
+func (c *HTTPClient) GetLastLatencyMs() int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastLatencyMs
 }
 
 // Request performs an HTTP request with retry and rate-limit handling
@@ -146,7 +154,13 @@ func (c *HTTPClient) Request(ctx context.Context, method, path string, body inte
 		req.Header.Set("Content-Type", contentType)
 		req.Header.Set("User-Agent", userAgent)
 
+		start := time.Now()
 		resp, err := c.httpClient.Do(req)
+		elapsed := time.Since(start).Milliseconds()
+		c.mu.Lock()
+		c.lastLatencyMs = elapsed
+		c.mu.Unlock()
+
 		if err != nil {
 			lastErr = &ErrConnectionFailed{URL: url, Err: err}
 			if ctx.Err() != nil {

@@ -1468,6 +1468,116 @@ export namespace main {
 	        this.title = source["title"];
 	    }
 	}
+	export class GitHubReleaseAsset {
+	    name: string;
+	    size: number;
+	    downloadUrl: string;
+	    downloadCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GitHubReleaseAsset(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.size = source["size"];
+	        this.downloadUrl = source["downloadUrl"];
+	        this.downloadCount = source["downloadCount"];
+	    }
+	}
+	export class GitHubReleaseInfo {
+	    tagName: string;
+	    name: string;
+	    body: string;
+	    prerelease: boolean;
+	    publishedAt: string;
+	    htmlUrl: string;
+	    hasUpdate: boolean;
+	    currentVersion: string;
+	    assets: GitHubReleaseAsset[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GitHubReleaseInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tagName = source["tagName"];
+	        this.name = source["name"];
+	        this.body = source["body"];
+	        this.prerelease = source["prerelease"];
+	        this.publishedAt = source["publishedAt"];
+	        this.htmlUrl = source["htmlUrl"];
+	        this.hasUpdate = source["hasUpdate"];
+	        this.currentVersion = source["currentVersion"];
+	        this.assets = this.convertValues(source["assets"], GitHubReleaseAsset);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SystemDiagnostics {
+	    appVersion: string;
+	    os: string;
+	    arch: string;
+	    goVersion: string;
+	    appDataDir: string;
+	    databasePath: string;
+	    databaseSizeBytes: number;
+	    databaseWalMode: boolean;
+	    panelsCount: number;
+	    activePanelName: string;
+	    dpapiActive: boolean;
+	    dpapiTestPassed: boolean;
+	    dpapiLatencyMs: number;
+	    securityLockout: boolean;
+	    allocatedMemMb: number;
+	    totalAllocMemMb: number;
+	    goroutinesCount: number;
+	    timestamp: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SystemDiagnostics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appVersion = source["appVersion"];
+	        this.os = source["os"];
+	        this.arch = source["arch"];
+	        this.goVersion = source["goVersion"];
+	        this.appDataDir = source["appDataDir"];
+	        this.databasePath = source["databasePath"];
+	        this.databaseSizeBytes = source["databaseSizeBytes"];
+	        this.databaseWalMode = source["databaseWalMode"];
+	        this.panelsCount = source["panelsCount"];
+	        this.activePanelName = source["activePanelName"];
+	        this.dpapiActive = source["dpapiActive"];
+	        this.dpapiTestPassed = source["dpapiTestPassed"];
+	        this.dpapiLatencyMs = source["dpapiLatencyMs"];
+	        this.securityLockout = source["securityLockout"];
+	        this.allocatedMemMb = source["allocatedMemMb"];
+	        this.totalAllocMemMb = source["totalAllocMemMb"];
+	        this.goroutinesCount = source["goroutinesCount"];
+	        this.timestamp = source["timestamp"];
+	    }
+	}
 	export class WindowState {
 	    width: number;
 	    height: number;
