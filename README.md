@@ -16,12 +16,10 @@
 
 ---
 
-## 🤖 AI-Assisted Development / Tuyên bố phát triển cùng AI
+## 🤖 ỨNG DỤNG VIDECODING
 
 > [!NOTE]
-> **Dự án SynoraDesk (tiền thân là PteroDesk) được phát triển và tối ưu hóa toàn diện với sự hỗ trợ của Trí tuệ nhân tạo (AI-Assisted Engineering)**, sử dụng nền tảng **Google DeepMind Antigravity / Gemini AI Agent**.
-> 
-> Từ kiến trúc đa tiến trình Go & Wails IPC, cơ chế bảo mật phần cứng Windows DPAPI, thuật toán chống tấn công dò mã bất biến theo thời gian (monotonic anti-tamper lockout), cho đến giao diện React 19 Glassmorphism, bộ studio xử lý hình nền kéo rê tương tác, hệ thống phân giải mã QR 2FA, và bộ kiểm thử tự động—tất cả đều được thiết kế, lập trình và tinh chỉnh thông qua quy trình hợp tác kỹ thuật liên tục giữa kỹ sư phát triển và AI Agent.
+> **Dự án SynoraDesk (tiền thân là PteroDesk) được phát triển và tối ưu với sự hỗ trợ của Trí tuệ nhân tạo **, sử dụng nền tảng **Google Gemini**.
 
 ---
 
@@ -72,7 +70,6 @@ flowchart TD
         PanelMgr["Panel Manager (Multi-profile, Live Health Ping, Favicon Fetcher)"]
         Discovery["API Discovery Engine (Tương thích Pterodactyl 1.x & 2.x)"]
         ConsoleWS["Wings WebSocket Client (Live Log Stream, Resource Telemetry)"]
-        DBClient["MySQL / MariaDB Engine (Query Execution, Schema Inspector)"]
         LockoutMgr["Monotonic Anti-Tamper Lockout (DPAPI + HMAC-SHA256)"]
         DPAPI["Windows DPAPI Hardware Vault (crypt32.dll CryptProtectData)"]
         SQLite["Pure Go SQLite Database (WAL Mode, modernc.org/sqlite)"]
