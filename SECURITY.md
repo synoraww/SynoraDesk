@@ -149,7 +149,7 @@ Tất cả các bí mật quản trị nhạy cảm—bao gồm khóa API máy k
 ## 11. Xác minh mã và kỹ thuật bảo mật được hỗ trợ bởi AI
 
 > [!GHI CHÚ]
-> **Cấu trúc bảo mật của SynoraDesk được thiết kế, triển khai và xem xét nghiêm ngặt với sự hỗ trợ của Google DeepMind AntiGravity / Gemini AI Agent.**
+> **Cấu trúc bảo mật của SynoraDesk được thiết kế, triển khai và xem xét với của Google GEMINI.**
 > 
 > Phân tích tĩnh tự động, xác thực mật mã, quy tắc ghi nhật ký không rò rỉ và kiểm tra tích hợp DPAPI đã được xác minh thông qua các quy trình kiểm tra tự động liên tục để đảm bảo không có rò rỉ văn bản thuần túy trên cả thời gian chạy Go và TypeScript.
 
