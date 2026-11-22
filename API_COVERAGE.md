@@ -1,95 +1,95 @@
-# Pterodactyl API Coverage Report
+# Báo cáo phạm vi bảo hiểm API Pterodactyl
 
-## Coverage Summary
+## Tóm tắt bảo hiểm
 
-Every endpoint discovered in the official Pterodactyl API is tracked in our internal registry (`internal/pterodactyl/discovery/registry.go`). The status of each endpoint is categorized into:
-- **TESTED**: Verified through automated mock tests or unit tests.
-- **IMPLEMENTED**: Fully coded in the Go client SDK and UI bindings.
-- **DOCUMENTED**: Documented from official API routes/source.
-- **DISCOVERED**: Cataloged in the discovery registry.
-- **UNSUPPORTED**: Specifically deprecated or omitted in target panel version.
-- **PERMISSION_REQUIRED**: Requires explicit user or API role permissions.
-
----
-
-## 1. Client API Coverage
-
-| Endpoint | HTTP Method | Implementation Status | Test Status |
-| :--- | :--- | :--- | :--- |
-| `/api/client/account` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/account/two-factor` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/account/two-factor` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/account/two-factor` | `DELETE` | IMPLEMENTED | TESTED |
-| `/api/client/account/email` | `PUT` | IMPLEMENTED | TESTED |
-| `/api/client/account/password` | `PUT` | IMPLEMENTED | TESTED |
-| `/api/client/account/api-keys` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/account/api-keys` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/account/api-keys/{id}` | `DELETE` | IMPLEMENTED | TESTED |
-| `/api/client/account/ssh-keys` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/account/ssh-keys` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/account/ssh-keys/remove` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/account/activity` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/resources` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/power` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/command` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/websocket` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/files/list` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/files/contents` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/files/write` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/files/create-folder` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/files/delete` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/files/rename` | `PUT` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/files/upload` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/files/compress` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/files/decompress` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/databases` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/databases` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/databases/{id}/rotate-password` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/databases/{id}` | `DELETE` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/backups` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/backups` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/backups/{uuid}/download` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/backups/{uuid}/lock` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/backups/{uuid}/restore` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/backups/{uuid}` | `DELETE` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/users` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/users` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/users/{uuid}` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/users/{uuid}` | `DELETE` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/network/allocations` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/network/allocations/{id}/primary` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/startup` | `GET` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/startup/variable` | `PUT` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/settings/rename` | `POST` | IMPLEMENTED | TESTED |
-| `/api/client/servers/{id}/settings/reinstall` | `POST` | IMPLEMENTED | TESTED |
+Mọi điểm cuối được phát hiện trong API Pterodactyl chính thức đều được theo dõi trong sổ đăng ký nội bộ của chúng tôi (`internal/pterodactyl/discovery/registry.go`). Trạng thái của mỗi điểm cuối được phân loại thành:
+- **ĐÃ KIỂM TRA**: Đã xác minh thông qua các bài kiểm tra mô phỏng hoặc bài kiểm tra đơn vị tự động.
+- **ĐÃ TRIỂN KHAI**: Được mã hóa đầy đủ trong các liên kết giao diện người dùng và SDK máy khách Go.
+- **ĐÃ ĐƯỢC TÀI LIỆU**: Được ghi lại từ các tuyến/nguồn API chính thức.
+- **ĐÃ KHÁM PHÁ**: Được liệt kê trong sổ đăng ký khám phá.
+- **KHÔNG ĐƯỢC HỖ TRỢ**: Cụ thể là không được dùng nữa hoặc bị bỏ qua trong phiên bản bảng điều khiển đích.
+- **PERMISSION_REQUIRED**: Yêu cầu quyền rõ ràng của người dùng hoặc vai trò API.
 
 ---
 
-## 2. Application API Coverage
+## 1. Phạm vi API ứng dụng khách
 
-| Endpoint | HTTP Method | Implementation Status | Test Status |
+| Điểm cuối | Phương thức HTTP | Tình trạng thực hiện | Trạng thái kiểm tra |
 | :--- | :--- | :--- | :--- |
-| `/api/application/servers` | `GET` | IMPLEMENTED | TESTED |
-| `/api/application/servers` | `POST` | IMPLEMENTED | TESTED |
-| `/api/application/servers/{id}` | `GET` | IMPLEMENTED | TESTED |
-| `/api/application/servers/{id}/build` | `PATCH` | IMPLEMENTED | TESTED |
-| `/api/application/servers/{id}/suspend` | `POST` | IMPLEMENTED | TESTED |
-| `/api/application/servers/{id}/unsuspend` | `POST` | IMPLEMENTED | TESTED |
-| `/api/application/servers/{id}/reinstall` | `POST` | IMPLEMENTED | TESTED |
-| `/api/application/servers/{id}` | `DELETE` | IMPLEMENTED | TESTED |
-| `/api/application/nodes` | `GET` | IMPLEMENTED | TESTED |
-| `/api/application/nodes` | `POST` | IMPLEMENTED | TESTED |
-| `/api/application/nodes/{id}` | `GET` | IMPLEMENTED | TESTED |
-| `/api/application/nodes/{id}/configuration` | `GET` | IMPLEMENTED | TESTED |
-| `/api/application/nodes/{id}` | `DELETE` | IMPLEMENTED | TESTED |
-| `/api/application/nodes/{id}/allocations` | `GET` | IMPLEMENTED | TESTED |
-| `/api/application/nodes/{id}/allocations` | `POST` | IMPLEMENTED | TESTED |
-| `/api/application/nodes/{id}/allocations/{id}` | `DELETE` | IMPLEMENTED | TESTED |
-| `/api/application/nests` | `GET` | IMPLEMENTED | TESTED (1.x only) |
-| `/api/application/nests/{nest}/eggs` | `GET` | IMPLEMENTED | TESTED (1.x only) |
-| `/api/application/nests/{nest}/eggs/{egg}` | `GET` | IMPLEMENTED | TESTED (1.x only) |
-| `/api/application/users` | `GET` | IMPLEMENTED | TESTED |
-| `/api/application/users` | `POST` | IMPLEMENTED | TESTED |
-| `/api/application/users/{id}` | `DELETE` | IMPLEMENTED | TESTED |
+| `/api/client/account` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/two-factor` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/two-factor` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/two-factor` | `DELETE` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/email` | `PUT` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/password` | `PUT` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/api-keys` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/api-keys` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/api-keys/{id}` | `DELETE` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/ssh-keys` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/ssh-keys` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/ssh-keys/remove` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/account/activity` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/resources` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/power` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/command` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/websocket` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/files/list` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/files/contents` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/files/write` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/files/create-folder` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/files/delete` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/files/rename` | `PUT` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/files/upload` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/files/compress` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/files/decompress` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/databases` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/databases` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/databases/{id}/rotate-password` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/databases/{id}` | `DELETE` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/backups` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/backups` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/backups/{uuid}/download` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/backups/{uuid}/lock` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/backups/{uuid}/restore` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/backups/{uuid}` | `DELETE` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/users` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/users` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/users/{uuid}` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/users/{uuid}` | `DELETE` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/network/allocations` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/network/allocations/{id}/primary` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/startup` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/startup/variable` | `PUT` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/settings/rename` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/client/servers/{id}/settings/reinstall` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+
+---
+
+## 2. Phạm vi API ứng dụng
+
+| Điểm cuối | Phương thức HTTP | Tình trạng thực hiện | Trạng thái kiểm tra |
+| :--- | :--- | :--- | :--- |
+| `/api/application/servers` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/servers` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/servers/{id}` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/servers/{id}/build` | `PATCH` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/servers/{id}/suspend` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/servers/{id}/unsuspend` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/servers/{id}/reinstall` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/servers/{id}` | `DELETE` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/nodes` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/nodes` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/nodes/{id}` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/nodes/{id}/configuration` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/nodes/{id}` | `DELETE` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/nodes/{id}/allocations` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/nodes/{id}/allocations` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/nodes/{id}/allocations/{id}` | `DELETE` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/nests` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA (chỉ 1.x) |
+| `/api/application/nests/{nest}/eggs` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA (chỉ 1.x) |
+| `/api/application/nests/{nest}/eggs/{egg}` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA (chỉ 1.x) |
+| `/api/application/users` | `GET` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/users` | `POST` | ĐÃ THỰC HIỆN | KIỂM TRA |
+| `/api/application/users/{id}` | `DELETE` | ĐÃ THỰC HIỆN | KIỂM TRA |

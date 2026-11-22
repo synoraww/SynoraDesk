@@ -1,35 +1,35 @@
-# Build Directory
+# Xây dựng thư mục
 
-The build directory is used to house all the build files and assets for your application. 
+Thư mục bản dựng được sử dụng để chứa tất cả các tệp bản dựng và nội dung cho ứng dụng của bạn.
 
-The structure is:
+Cấu trúc là:
 
-* bin - Output directory
-* darwin - macOS specific files
-* windows - Windows specific files
+* bin - Thư mục đầu ra
+* darwin - tập tin cụ thể của macOS
+* windows - Các tập tin cụ thể của Windows
 
-## Mac
+## macOS
 
-The `darwin` directory holds files specific to Mac builds.
-These may be customised and used as part of the build. To return these files to the default state, simply delete them
-and
-build with `wails build`.
+Thư mục `darwin` chứa các tệp dành riêng cho bản dựng Mac.
+Chúng có thể được tùy chỉnh và sử dụng như một phần của bản dựng. Để đưa các tệp này về trạng thái mặc định, chỉ cần xóa chúng
+xong
+xây dựng với `wails build`.
 
-The directory contains the following files:
+Thư mục chứa các tập tin sau:
 
-- `Info.plist` - the main plist file used for Mac builds. It is used when building using `wails build`.
-- `Info.dev.plist` - same as the main plist file but used when building using `wails dev`.
+- `Info.plist` - tệp plist chính được sử dụng cho các bản dựng Mac. Nó được sử dụng khi xây dựng bằng `wails build`.
+- `Info.dev.plist` - giống như tệp plist chính nhưng được sử dụng khi xây dựng bằng `wails dev`.
 
 ## Windows
 
-The `windows` directory contains the manifest and rc files used when building with `wails build`.
-These may be customised for your application. To return these files to the default state, simply delete them and
-build with `wails build`.
+Thư mục `windows` chứa tệp kê khai và tệp rc được sử dụng khi xây dựng với `wails build`.
+Đây có thể được tùy chỉnh cho ứng dụng của bạn. Để đưa các tệp này về trạng thái mặc định, chỉ cần xóa chúng và
+xây dựng với `wails build`.
 
-- `icon.ico` - The icon used for the application. This is used when building using `wails build`. If you wish to
-  use a different icon, simply replace this file with your own. If it is missing, a new `icon.ico` file
-  will be created using the `appicon.png` file in the build directory.
-- `installer/*` - The files used to create the Windows installer. These are used when building using `wails build`.
-- `info.json` - Application details used for Windows builds. The data here will be used by the Windows installer,
-  as well as the application itself (right click the exe -> properties -> details)
-- `wails.exe.manifest` - The main application manifest file.
+- `icon.ico` - Biểu tượng được sử dụng cho ứng dụng. Điều này được sử dụng khi xây dựng bằng `wails build`. Nếu bạn muốn
+  sử dụng một biểu tượng khác, chỉ cần thay thế tệp này bằng tệp của riêng bạn. Nếu nó bị thiếu, một tệp `icon.ico` mới
+  sẽ được tạo bằng tệp `appicon.png` trong thư mục bản dựng.
+- `installer/*` - Các tệp được sử dụng để tạo trình cài đặt Windows. Chúng được sử dụng khi xây dựng bằng `wails build`.
+- `info.json` - Chi tiết ứng dụng được sử dụng cho các bản dựng Windows. Dữ liệu ở đây sẽ được trình cài đặt Windows sử dụng,
+  cũng như chính ứng dụng (nhấp chuột phải vào exe -> thuộc tính -> chi tiết)
+- `wails.exe.manifest` - Tệp kê khai ứng dụng chính.

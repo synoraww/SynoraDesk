@@ -1,18 +1,18 @@
-# Pterodactyl Version Compatibility Matrix
+# Ma trận tương thích phiên bản Pterodactyl
 
-## Overview
+## Tổng quan
 
-PteroDesk supports Pterodactyl 1.x installations while providing forward compatibility for Pterodactyl 2.x developments.
+PteroDesk hỗ trợ cài đặt Pterodactyl 1.x đồng thời cung cấp khả năng tương thích về phía trước cho các phát triển Pterodactyl 2.x.
 
 ---
 
-## 1. Version Detection & Capability Evaluation
+## 1. Phát hiện phiên bản và đánh giá khả năng
 
-PteroDesk features an automated capability detection engine (`internal/pterodactyl/discovery/capability.go`).
-Upon saving or switching to a Panel profile, the system performs a ping test and evaluates:
-1. Available API credentials (Client API key, Application API key, or both).
-2. Panel version string reported by the server header or system endpoint.
-3. Enabled features and visible UI tabs.
+PteroDesk có công cụ phát hiện khả năng tự động (`internal/pterodactyl/discovery/capability.go`).
+Khi lưu hoặc chuyển sang cấu hình Bảng điều khiển, hệ thống sẽ thực hiện kiểm tra ping và đánh giá:
+1. Thông tin xác thực API có sẵn (Khóa API ứng dụng khách, khóa API ứng dụng hoặc cả hai).
+2. Chuỗi phiên bản bảng điều khiển được báo cáo bởi tiêu đề máy chủ hoặc điểm cuối hệ thống.
+3. Các tính năng được kích hoạt và các tab giao diện người dùng hiển thị.
 
 ```
                       +-----------------------+
@@ -38,21 +38,21 @@ Upon saving or switching to a Panel profile, the system performs a ping test and
 
 ---
 
-## 2. Key Differences: 1.x vs 2.x
+## 2. Sự khác biệt chính: 1.x và 2.x
 
-| Feature Area | Pterodactyl 1.x | Pterodactyl 2.x | PteroDesk Adaptation |
+| Khu vực đặc trưng | Pterodactyl 1.x | Pterodactyl 2.x | Thích ứng PteroDesk |
 | :--- | :--- | :--- | :--- |
-| **Nests API** | `/api/application/nests` | Deprecated / Removed | Dynamic capability toggle (`CanManageNests`); hidden on 2.x |
-| **Server Blueprints** | Contained in Egg definitions | Modular Blueprints system | Handled gracefully via fallback schemas |
-| **Admin API** | Mixed within Application API | Dedicated `/api/admin` namespace | Dynamic route resolver in `internal/api` |
-| **Console WebSocket** | Short-lived token via `/websocket` | Enhanced JWT rotation | Handled via `TokenRefresher` callback in `internal/api/websocket.go` |
-| **SFTP Authentication** | Server SFTP credentials with user.id | Unified daemon auth | Handled seamlessly by `internal/sftp/client.go` |
+| **API tổ** | `/api/application/nests` | Không được dùng nữa/Đã xóa | Chuyển đổi khả năng động (`CanManageNests`); ẩn trên 2.x |
+| **Bản thiết kế máy chủ** | Có trong định nghĩa Trứng | Hệ thống bản thiết kế mô-đun | Được xử lý một cách khéo léo thông qua các lược đồ dự phòng |
+| **API quản trị** | Được kết hợp trong API ứng dụng | Không gian tên `/api/admin` chuyên dụng | Trình phân giải tuyến đường động trong `internal/api` |
+| **Bảng điều khiển WebSocket** | Mã thông báo tồn tại trong thời gian ngắn qua `/websocket` | Xoay JWT nâng cao | Được xử lý thông qua lệnh gọi lại `TokenRefresher` trong `internal/api/websocket.go` |
+| **Xác thực SFTP** | Thông tin xác thực SFTP của máy chủ với user.id | Xác thực daemon thống nhất | Được xử lý liền mạch bởi `internal/sftp/client.go` |
 
 ---
 
-## 3. Dynamic UI Behavior
+## 3. Hành vi giao diện người dùng động
 
-When an endpoint or feature is unsupported for a panel:
-- **Missing Application API Key**: Administrative tabs (Nodes, User Management, Server Provisioning) show an informative capability badge prompting the user to supply an Application API token in Panel Settings.
-- **2.x Version Detected**: Nests management is replaced with direct Egg/Blueprint configurations, preventing 404 route errors.
-- **Missing Granular Permissions**: Client API error responses (`403 Forbidden` / `HttpForbiddenException`) are mapped to user-friendly notifications detailing the missing permission key (e.g. `file.delete` or `control.restart`).
+Khi điểm cuối hoặc tính năng không được hỗ trợ cho bảng điều khiển:
+- **Thiếu Khóa API ứng dụng**: Các tab Quản trị (Nút, Quản lý người dùng, Cung cấp máy chủ) hiển thị huy hiệu khả năng cung cấp thông tin nhắc người dùng cung cấp mã thông báo API ứng dụng trong Cài đặt bảng điều khiển.
+- **Đã phát hiện phiên bản 2.x**: Quản lý tổ được thay thế bằng cấu hình Trứng/Bản thiết kế trực tiếp, ngăn ngừa lỗi tuyến đường 404.
+- **Thiếu quyền chi tiết**: Phản hồi lỗi API máy khách (`403 Forbidden` / `HttpForbiddenException`) được ánh xạ tới các thông báo thân thiện với người dùng nêu chi tiết khóa cấp phép bị thiếu (ví dụ: `file.delete` hoặc `control.restart`).

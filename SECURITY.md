@@ -1,45 +1,45 @@
-# 🛡️ SynoraDesk Security Policy & Specification
+# 🛡️ Chính sách và thông số bảo mật của SynoraDesk
 
-## 1. Supported Versions
+## 1. Phiên bản được hỗ trợ
 
-Security updates and vulnerability patches are actively maintained for the following versions of SynoraDesk:
+Các bản cập nhật bảo mật và bản vá lỗ hổng bảo mật được duy trì tích cực cho các phiên bản SynoraDesk sau:
 
-| Version | Status | Security Support | Recommended Action |
+| Phiên bản | Trạng thái | Hỗ trợ bảo mật | Hành động được đề xuất |
 | :--- | :--- | :--- | :--- |
-| **v1.04A** | **Current Stable** | ✅ **Active Full Support** | Recommended for all users |
-| **v1.0.x - v1.03A** | Deprecated | ⚠️ Critical Fixes Only | Upgrade to v1.04A or newer |
-| **< v1.0.0** | Unsupported | ❌ End of Life (EOL) | Not supported |
+| **v1.04A** | **Ổn định hiện tại** | ✅ **Hỗ trợ đầy đủ tích cực** | Đề xuất cho tất cả người dùng |
+| **v1.0.x - v1.03A** | Không dùng nữa | ⚠️ Chỉ sửa lỗi nghiêm trọng | Nâng cấp lên v1.04A hoặc mới hơn |
+| **< v1.0.0** | Không được hỗ trợ | ❌ Đã hết vòng đời (EOL) | Không được hỗ trợ |
 
 ---
 
-## 2. Reporting a Vulnerability
+## 2. Báo cáo lỗ hổng
 
-We take the security of SynoraDesk and its users with the utmost seriousness. Because SynoraDesk manages remote game servers, administrative API tokens, SSH keys, and database credentials, we encourage responsible disclosure of any potential vulnerabilities.
+Chúng tôi coi trọng vấn đề bảo mật của SynoraDesk và người dùng của nó một cách nghiêm túc nhất. Vì SynoraDesk quản lý các máy chủ trò chơi từ xa, mã thông báo API quản trị, khóa SSH và thông tin xác thực cơ sở dữ liệu nên chúng tôi khuyến khích tiết lộ một cách có trách nhiệm về mọi lỗ hổng tiềm ẩn.
 
-### Responsible Disclosure Process
-- **Do NOT open a public GitHub issue** for security-sensitive bugs or zero-day vulnerabilities.
-- Please report vulnerabilities through **GitHub Private Vulnerability Reporting** directly on the repository:
-  👉 [Report a security vulnerability on GitHub](https://github.com/IsN3Co4/SynoraDesk/security/advisories/new)
-- Or contact the maintainer directly via email:
-  📧 **`n3co4@yahoo.com`** (Subject: `[SECURITY] SynoraDesk Vulnerability Report`)
+### Quy trình tiết lộ có trách nhiệm
+- **KHÔNG mở vấn đề GitHub công khai** đối với các lỗi nhạy cảm về bảo mật hoặc lỗ hổng zero-day.
+- Vui lòng báo cáo các lỗ hổng thông qua **Báo cáo lỗ hổng bảo mật riêng tư của GitHub** trực tiếp trên kho lưu trữ:
+  👉 [Báo cáo lỗ hổng bảo mật trên GitHub](https://github.com/IsN3Co4/SynoraDesk/security/advisories/new)
+- Hoặc liên hệ trực tiếp với người bảo trì qua email:
+  📧 **`n3co4@yahoo.com`** (Chủ đề: `[SECURITY] SynoraDesk Vulnerability Report`)
 
-### What to Include in Your Report
-To help us triage and resolve the issue quickly, please provide:
-1. A clear description of the vulnerability and its potential impact.
-2. Step-by-step reproduction instructions or a minimal Proof of Concept (PoC).
-3. The affected component(s) (e.g., DPAPI encryption, lockout mechanism, WebSocket client, SFTP engine).
-4. Environment details (Windows version, WebView2 runtime version, SynoraDesk build version).
+### Những gì cần đưa vào báo cáo của bạn
+Để giúp chúng tôi phân loại và giải quyết vấn đề nhanh chóng, vui lòng cung cấp:
+1. Mô tả rõ ràng về lỗ hổng và tác động tiềm tàng của nó.
+2. Hướng dẫn sao chép từng bước hoặc Bằng chứng khái niệm (PoC) tối thiểu.
+3. (Các) thành phần bị ảnh hưởng (ví dụ: mã hóa DPAPI, cơ chế khóa, ứng dụng khách WebSocket, công cụ SFTP).
+4. Chi tiết về môi trường (phiên bản Windows, phiên bản thời gian chạy WebView2, phiên bản xây dựng SynoraDesk).
 
-### Response SLA & Timeline
-- **Initial Acknowledgment**: Within **24 to 48 hours**.
-- **Triage & Severity Assessment**: Within **3 business days**.
-- **Patch Release & Advisory Publication**: Coordinated disclosure within **14 to 30 days** depending on vulnerability severity.
+### Phản hồi SLA & Dòng thời gian
+- **Xác nhận ban đầu**: Trong vòng **24 đến 48 giờ**.
+- **Đánh giá mức độ nghiêm trọng và phân loại**: Trong vòng **3 ngày làm việc**.
+- **Phát hành bản vá và xuất bản tư vấn**: Phối hợp công bố trong vòng **14 đến 30 ngày** tùy thuộc vào mức độ nghiêm trọng của lỗ hổng.
 
 ---
 
-## 3. Defense-in-Depth Security Model
+## 3. Mô hình bảo mật phòng thủ chuyên sâu
 
-SynoraDesk is engineered from the ground up following defense-in-depth principles. No single security control is relied upon in isolation.
+SynoraDesk được thiết kế từ đầu theo nguyên tắc bảo vệ chuyên sâu. Không có biện pháp kiểm soát bảo mật nào được dựa vào một cách cô lập.
 
 ```mermaid
 flowchart TD
@@ -71,94 +71,94 @@ flowchart TD
 
 ---
 
-## 4. Hardware-Bound Credential Storage (Windows DPAPI)
+## 4. Lưu trữ thông tin xác thực ràng buộc phần cứng (Windows DPAPI)
 
-All sensitive administrative secrets—including Pterodactyl Client API keys (`ptlc_...`), Application API keys (`ptla_...`), SFTP passwords, SSH private keys, and MySQL database passwords—are encrypted at rest using the **Windows Data Protection API (DPAPI)**.
+Tất cả các bí mật quản trị nhạy cảm—bao gồm khóa API máy khách Pterodactyl (`ptlc_...`), khóa API ứng dụng (`ptla_...`), mật khẩu SFTP, khóa riêng SSH và mật khẩu cơ sở dữ liệu MySQL—đều được mã hóa ở trạng thái lưu trữ bằng cách sử dụng **API bảo vệ dữ liệu Windows (DPAPI)**.
 
-- **System Calls**: `CryptProtectData` and `CryptUnprotectData` dynamically linked via `crypt32.dll` (`internal/security/dpapi_windows.go`).
-- **Key Derivation**: Encryption keys are derived directly from the active Windows user login credentials via Windows Local Security Authority (LSA) subsystem.
-- **Portability Guard & Anti-Theft**: If the SQLite database (`pterodesk.db`) or configuration files are copied to another computer or accessed by a different Windows user profile, the encrypted tokens **cannot be decrypted** under any circumstances.
-- **Process Memory Zeroing**: Sensitive plaintext bytes are wiped from system memory (`procLocalFree`) immediately after cryptographic operations complete.
-
----
-
-## 5. Application Passcode Lock & Vault
-
-- **Passcode Modes**: Supports **4-digit PIN**, **6-digit PIN**, **8-digit PIN**, or **Complex Text Passwords**.
-- **Cryptographic Hashing**: Passcodes are hashed with a salted SHA-256 derivation scheme using a cryptographically secure 32-byte pseudo-random salt generated locally on initial setup.
-- **Configurable Auto-Lock Idle Timer**: Automatically locks the desktop interface after `1`, `5`, `15`, or `30` minutes of detected user inactivity (no mouse moves or keystrokes).
-- **Launch Enforcement**: Optional instant lockout upon launching the application, requiring authentication before exposing any panel data.
-- **Quick Lock**: Single-click manual lockout available on the Custom TitleBar (`Ctrl + L` or Lock Icon).
+- **Cuộc gọi hệ thống**: `CryptProtectData` và `CryptUnprotectData` được liên kết động qua `crypt32.dll` (`internal/security/dpapi_windows.go`).
+- **Dẫn xuất khóa**: Khóa mã hóa được lấy trực tiếp từ thông tin đăng nhập đang hoạt động của người dùng Windows thông qua hệ thống con Cơ quan bảo mật cục bộ (LSA) của Windows.
+- **Bảo vệ tính di động & Chống trộm**: Nếu cơ sở dữ liệu SQLite (`pterodesk.db`) hoặc các tệp cấu hình được sao chép sang một máy tính khác hoặc được truy cập bởi một hồ sơ người dùng Windows khác, thì các mã thông báo đã mã hóa **không thể được giải mã** trong mọi trường hợp.
+- **Xóa Zero bộ nhớ quy trình**: Các byte văn bản gốc nhạy cảm sẽ bị xóa khỏi bộ nhớ hệ thống (`procLocalFree`) ngay sau khi hoàn tất các hoạt động mã hóa.
 
 ---
 
-## 6. Monotonic Anti-Tamper Lockout (`internal/security/lockout.go`)
+## 5. Khóa & Vault mật mã ứng dụng
 
-To prevent brute-force attacks against the application PIN or password, SynoraDesk implements a hardware-bound monotonic anti-tamper lockout subsystem:
-
-- **State File Protection**: Lockout status is persisted to `%APPDATA%\PteroDesk\data\security_lockout.dat`, protected by a dual-layer security envelope:
-  1. **DPAPI Encryption**: Machine and user-bound payload encryption.
-  2. **HMAC-SHA256 Signature**: A cryptographic message authentication code computed over the state variables (`FailedAttempts`, `RemainingLockoutSeconds`, `IsLockedOut`, `Config`).
-- **Tamper Resistance**: Any external file tampering, manual hex editing, or file replacement invalidates the HMAC signature, immediately triggering an administrative security state and applying the maximum lockout penalty.
-- **Monotonic Time Verification**: The lockout penalty measures real continuous operational time. **Rebooting or shutting down the machine will NOT bypass or reduce the penalty countdown**; remaining seconds freeze until the application resumes.
-- **Escalating Penalty Tiers**: Configurable thresholds (3, 5, or 10 attempts) lock the application for durations ranging from 1 to 60 minutes.
+- **Chế độ mật mã**: Hỗ trợ **Mã PIN 4 chữ số**, **Mã PIN 6 chữ số**, **Mã PIN 8 chữ số** hoặc **Mật khẩu văn bản phức tạp**.
+- **Băm mật mã**: Mật mã được băm bằng sơ đồ phái sinh SHA-256 được tạo muối bằng cách sử dụng muối giả ngẫu nhiên 32 byte bảo mật bằng mật mã được tạo cục bộ trong lần thiết lập ban đầu.
+- **Bộ hẹn giờ nhàn rỗi tự động khóa có thể định cấu hình**: Tự động khóa giao diện máy tính để bàn sau `1`, `5`, `15` hoặc `30` phút khi người dùng không hoạt động được phát hiện (không di chuyển chuột hoặc nhấn phím).
+- **Thực thi khởi chạy**: Khóa ngay lập tức tùy chọn khi khởi chạy ứng dụng, yêu cầu xác thực trước khi hiển thị bất kỳ dữ liệu bảng nào.
+- **Khóa nhanh**: Khóa thủ công bằng một cú nhấp chuột có sẵn trên Thanh tiêu đề tùy chỉnh (`Ctrl + L` hoặc Biểu tượng khóa).
 
 ---
 
-## 7. Emergency Self-Destruct Wipe (`WipeAllData`)
+## 6. Khóa chống giả mạo đơn điệu (`internal/security/lockout.go`)
 
-For high-security operations (e.g., enterprise laptops or laptops used in public environments), administrators can enable the **Emergency Auto-Wipe** feature:
+Để ngăn chặn các cuộc tấn công bạo lực nhằm vào mã PIN hoặc mật khẩu của ứng dụng, SynoraDesk triển khai một hệ thống con khóa chống giả mạo đơn điệu gắn liền với phần cứng:
 
-- When the number of consecutive failed authentication attempts exceeds the wipe threshold (default: 10 failed attempts):
-  1. The application halts all active Wings WebSocket and SFTP connections immediately.
-  2. The SQLite database (`pterodesk.db`), SQLite WAL journal (`pterodesk.db-wal`), and SQLite shared memory files are completely zeroized and deleted from disk.
-  3. All stored DPAPI-encrypted credential profiles and lockout state files are unlinked.
-  4. The frontend UI transitions to a sanitized, factory-reset screen, preventing forensic recovery of API keys.
+- **Bảo vệ tệp trạng thái**: Trạng thái khóa được duy trì ở `%APPDATA%\PteroDesk\data\security_lockout.dat`, được bảo vệ bởi lớp bảo mật hai lớp:
+  1. **Mã hóa DPAPI**: Mã hóa tải trọng do máy và người dùng ràng buộc.
+  2. **Chữ ký HMAC-SHA256**: Mã xác thực thông điệp mật mã được tính toán dựa trên các biến trạng thái (`FailedAttempts`, `RemainingLockoutSeconds`, `IsLockedOut`, `Config`).
+- **Chống giả mạo**: Bất kỳ hành vi giả mạo tệp bên ngoài, chỉnh sửa hex thủ công hoặc thay thế tệp đều làm mất hiệu lực chữ ký HMAC, ngay lập tức kích hoạt trạng thái bảo mật quản trị và áp dụng hình phạt khóa tối đa.
+- **Xác minh thời gian đơn điệu**: Hình phạt khóa máy đo thời gian hoạt động liên tục thực sự. **Khởi động lại hoặc tắt máy sẽ KHÔNG bỏ qua hoặc giảm thời gian đếm ngược hình phạt**; số giây còn lại đóng băng cho đến khi ứng dụng tiếp tục.
+- **Mức hình phạt tăng dần**: Các ngưỡng có thể định cấu hình (3, 5 hoặc 10 lần thử) sẽ khóa ứng dụng trong khoảng thời gian từ 1 đến 60 phút.
 
 ---
 
-## 8. In-Memory Sanitization & Zero-Trace Logging
+## 7. Xóa tự hủy khẩn cấp (`WipeAllData`)
 
-- **Token Truncation & Masking**:
-  API tokens are never displayed in full in the UI. They are irreversibly masked to prevent shoulder-surfing:
+Đối với các hoạt động có tính bảo mật cao (ví dụ: máy tính xách tay của doanh nghiệp hoặc máy tính xách tay được sử dụng trong môi trường công cộng), quản trị viên có thể bật tính năng **Tự động xóa khẩn cấp**:
+
+- Khi số lần xác thực thất bại liên tiếp vượt quá ngưỡng xóa (mặc định: 10 lần thử không thành công):
+  1. Ứng dụng sẽ tạm dừng tất cả các kết nối Wings WebSocket và SFTP đang hoạt động ngay lập tức.
+  2. Cơ sở dữ liệu SQLite (`pterodesk.db`), nhật ký SQLite WAL (`pterodesk.db-wal`) và các tệp bộ nhớ dùng chung SQLite được xóa hoàn toàn và bị xóa khỏi đĩa.
+  3. Tất cả hồ sơ thông tin xác thực được mã hóa DPAPI được lưu trữ và tệp trạng thái khóa đều bị hủy liên kết.
+  4. Giao diện người dùng giao diện người dùng chuyển sang màn hình được vệ sinh, khôi phục cài đặt gốc, ngăn chặn việc khôi phục pháp lý các khóa API.
+
+---
+
+## 8. Dọn dẹp trong bộ nhớ & ghi nhật ký không dấu vết
+
+- **Cắt ngắn và che giấu mã thông báo**:
+  Mã thông báo API không bao giờ được hiển thị đầy đủ trong giao diện người dùng. Chúng được che đậy không thể đảo ngược để ngăn chặn việc lướt vai:
   ```
   Original:  ptlc_4b8f09d2a3e14567b8c9d0e1f2a3b4c5
   Masked:    ptlc••••••••b4c5
   ```
-- **Zero-Trace Structured Logging**:
-  Zerolog logging (`internal/logger/logger.go`) enforces a mandatory security hook. Any field containing names such as `token`, `password`, `secret`, `authorization`, `api_key`, or `bearer` is scrubbed and replaced with `[REDACTED]` before writing to standard output or disk files.
+- **Ghi nhật ký có cấu trúc không dấu vết**:
+  Ghi nhật ký Zerolog (`internal/logger/logger.go`) thực thi móc bảo mật bắt buộc. Bất kỳ trường nào chứa các tên như `token`, `password`, `secret`, `authorization`, `api_key` hoặc `bearer` đều bị xóa và thay thế bằng `[REDACTED]` trước khi ghi vào tệp đầu ra tiêu chuẩn hoặc tệp đĩa.
 
 ---
 
-## 9. Network, Transport & WebSocket Security
+## 9. Bảo mật Mạng, Giao thông & WebSocket
 
-- **Strict HTTPS / WSS Enforcement**: All communication to Pterodactyl Panels and Wings Daemons enforces Transport Layer Security (TLS 1.2 / TLS 1.3). Insecure `http://` or `ws://` schemes are rejected.
-- **Per-Panel Connection Isolation**: Each configured Pterodactyl Panel runs on an isolated `http.Client` instance with dedicated cookie jars, timeouts, and transport pools. Credentials and session tokens are strictly sequestered across panels.
-- **No In-App Web Browsers or Iframes**: SynoraDesk strictly avoids embedding Pterodactyl web panels inside iframes or webview DOM contexts. All communication is conducted via authenticated REST API JSON or raw binary packets, eliminating DOM-based Cross-Site Scripting (XSS) and CSRF attack surfaces.
-
----
-
-## 10. SSH & Direct SFTP Channel Security
-
-- **Cipher Suite Negotiation**: The direct SFTP engine (`pkg/sftp` / `golang.org/x/crypto/ssh`) negotiates secure modern ciphers (`chacha20-poly1305@openssh.com`, `aes128-gcm@openssh.com`, `aes256-gcm@openssh.com`).
-- **Memory-Safe Chunked Streaming**: File uploads and downloads stream through dynamic memory buffers with size validation guards to prevent buffer-overflow and memory-exhaustion DoS attacks.
-- **Credential Ephemerality**: SFTP session credentials are never cached in unencrypted global state and are discarded upon tab closure or session termination.
+- **Thực thi HTTPS / WSS nghiêm ngặt**: Tất cả giao tiếp với Pterodactyl Panels và Wings Daemon đều thực thi Bảo mật lớp vận chuyển (TLS 1.2 / TLS 1.3). Các lược đồ `http://` hoặc `ws://` không an toàn bị từ chối.
+- **Cách ly kết nối trên mỗi bảng**: Mỗi Bảng điều khiển Pterodactyl được định cấu hình chạy trên một phiên bản `http.Client` riêng biệt với các lọ cookie, thời gian chờ và nhóm vận chuyển chuyên dụng. Thông tin xác thực và mã thông báo phiên được sắp xếp nghiêm ngặt trên các bảng.
+- **Không có trình duyệt web hoặc khung nội tuyến trong ứng dụng**: SynoraDesk tuyệt đối tránh nhúng các bảng web Pterodactyl bên trong khung nội tuyến hoặc ngữ cảnh DOM của chế độ xem web. Tất cả giao tiếp được thực hiện thông qua REST API JSON đã được xác thực hoặc các gói nhị phân thô, loại bỏ các bề mặt tấn công Cross-Site Scripting (XSS) và CSRF dựa trên DOM.
 
 ---
 
-## 11. AI-Assisted Security Engineering & Code Verification
+## 10. Bảo mật kênh SSH & SFTP trực tiếp
 
-> [!NOTE]
-> **SynoraDesk's security architecture was designed, implemented, and rigorously reviewed with the assistance of Google DeepMind Antigravity / Gemini AI Agent.**
+- **Thỏa thuận bộ mật mã**: Công cụ SFTP trực tiếp (`pkg/sftp` / `golang.org/x/crypto/ssh`) đàm phán các mật mã hiện đại an toàn (`chacha20-poly1305@openssh.com`, `aes128-gcm@openssh.com`, `aes256-gcm@openssh.com`).
+- **Truyền phát theo khối an toàn cho bộ nhớ**: Tải lên và tải xuống tệp qua bộ đệm bộ nhớ động với các biện pháp bảo vệ xác thực kích thước để ngăn chặn các cuộc tấn công DoS tràn bộ đệm và làm cạn kiệt bộ nhớ.
+- **Thông tin xác thực tạm thời**: Thông tin xác thực phiên SFTP không bao giờ được lưu vào bộ nhớ đệm ở trạng thái toàn cầu không được mã hóa và bị loại bỏ khi đóng tab hoặc chấm dứt phiên.
+
+---
+
+## 11. Xác minh mã và kỹ thuật bảo mật được hỗ trợ bởi AI
+
+> [!GHI CHÚ]
+> **Cấu trúc bảo mật của SynoraDesk được thiết kế, triển khai và xem xét nghiêm ngặt với sự hỗ trợ của Google DeepMind AntiGravity / Gemini AI Agent.**
 > 
-> Automated static analysis, cryptographic validation, zero-leakage logging rules, and DPAPI integration tests were verified through continuous automated testing pipelines to ensure zero plain-text leaks across both Go and TypeScript runtimes.
+> Phân tích tĩnh tự động, xác thực mật mã, quy tắc ghi nhật ký không rò rỉ và kiểm tra tích hợp DPAPI đã được xác minh thông qua các quy trình kiểm tra tự động liên tục để đảm bảo không có rò rỉ văn bản thuần túy trên cả thời gian chạy Go và TypeScript.
 
 ---
 
-## 12. Security Best Practices for Administrators
+## 12. Thực tiễn bảo mật tốt nhất dành cho quản trị viên
 
-To ensure maximum security when administering Pterodactyl infrastructure:
-1. **Use Client API Keys whenever possible**: Generate personal Client API Keys (`ptlc_...`) with limited server permissions rather than root Application API Keys (`ptla_...`) unless performing cluster-wide infrastructure operations.
-2. **Enable Two-Factor Authentication (2FA)**: Always enable 2FA on your Pterodactyl accounts. SynoraDesk provides full support for scanning and rendering 2FA QR codes.
-3. **Protect your Windows User Account**: Because DPAPI binds encryption keys to your Windows user profile, protect your operating system with a strong password, Windows Hello PIN, and BitLocker full-disk encryption.
-4. **Enable Passcode Auto-Lock**: Set an idle lock timer of 5 or 15 minutes to secure the app when stepping away from your workstation.
+Để đảm bảo an ninh tối đa khi quản lý cơ sở hạ tầng Pterodactyl:
+1. **Sử dụng Khóa API ứng dụng khách bất cứ khi nào có thể**: Tạo Khóa API ứng dụng khách cá nhân (`ptlc_...`) với quyền máy chủ hạn chế thay vì Khóa API ứng dụng gốc (`ptla_...`) trừ khi thực hiện các hoạt động cơ sở hạ tầng trên toàn cụm.
+2. **Bật xác thực hai yếu tố (2FA)**: Luôn bật 2FA trên tài khoản Pterodactyl của bạn. SynoraDesk cung cấp hỗ trợ đầy đủ để quét và hiển thị mã QR 2FA.
+3. **Bảo vệ tài khoản người dùng Windows của bạn**: Vì DPAPI liên kết các khóa mã hóa với hồ sơ người dùng Windows của bạn nên hãy bảo vệ hệ điều hành của bạn bằng mật khẩu mạnh, mã PIN Windows Hello và mã hóa toàn bộ đĩa BitLocker.
+4. **Bật Tự động khóa bằng mật mã**: Đặt bộ hẹn giờ khóa không hoạt động trong 5 hoặc 15 phút để bảo mật ứng dụng khi rời khỏi máy trạm của bạn.
