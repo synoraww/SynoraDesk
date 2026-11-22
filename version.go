@@ -9,7 +9,7 @@ import (
 // Application build and release metadata
 // Single source of truth for versioning across the Go backend
 const (
-	AppVersion     = "1.03A"
+	AppVersion     = "1.04A"
 	AppName        = "SynoraDesk"
 	AppGitHubRepo  = "synoraww/SynoraDesk"
 	AppAuthor      = "Synoraww"

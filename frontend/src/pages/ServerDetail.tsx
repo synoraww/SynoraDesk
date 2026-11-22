@@ -72,8 +72,11 @@ import {
   ChevronUp,
   Minimize2,
   Maximize2,
+  Scissors,
+  ClipboardPaste,
+  Link,
 } from 'lucide-react';
-import { ColorizedLine, ConsoleToolbar } from '../components/common/ConsoleViewer';
+import { ColorizedLine, ConsoleToolbar, getLogLineEntries } from '../components/common/ConsoleViewer';
 import { ServerSectionHeader } from '../components/server/ServerSectionHeader';
 import { ServerSettingsTab } from '../components/server/settings/ServerSettingsTab';
 import { PteroMonacoEditor } from '../components/common/PteroMonacoEditor';
@@ -88,6 +91,12 @@ import { useUIStore } from '../stores/uiStore';
 import { usePanelStore } from '../stores/panelStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useI18n } from '../i18n';
+import {
+  useFileClipboard,
+  setFileClipboard,
+  clearFileClipboard,
+  getFileClipboard,
+} from '../utils/fileClipboard';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { LoadingSkeleton } from '../components/common/LoadingSkeleton';
@@ -196,6 +205,10 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     'Connected to daemon WebSocket...',
     'Loading server state...',
   ]);
+  const consolePendingRef = useRef<string[]>([]);
+  const consoleCurrentLineRef = useRef('');
+  const consoleHasLiveLineRef = useRef(false);
+  const consoleFlushFrameRef = useRef<number | null>(null);
   const [commandInput, setCommandInput] = useState('');
   const [optimisticState, setOptimisticState] = useState<string | null>(null);
   const [powerDialog, setPowerDialog] = useState<'start' | 'stop' | 'restart' | 'kill' | null>(null);
@@ -226,9 +239,8 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    if (consoleEndRef.current) {
-      consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    const container = consoleContainerRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
     setAutoScroll(true);
   };
 
@@ -247,7 +259,15 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
   const [sftpUsername, setSftpUsername] = useState('');
   const [sftpPassword, setSftpPassword] = useState('');
 
-  const [currentDir, setCurrentDir] = useState('/');
+  const clipboard = useFileClipboard();
+
+  const [currentDir, setCurrentDir] = useState<string>(() => {
+    try {
+      return localStorage.getItem(`pterodesk_files_dir_${identifier}`) || '/';
+    } catch {
+      return '/';
+    }
+  });
   const [fileList, setFileList] = useState<UnifiedFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
 
@@ -266,7 +286,31 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Advanced File Operations State
-  const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
+  const [selectedFileNames, setSelectedFileNames] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`pterodesk_files_selected_${identifier}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Persist current directory and selected files per server
+  useEffect(() => {
+    if (identifier && currentDir) {
+      try {
+        localStorage.setItem(`pterodesk_files_dir_${identifier}`, currentDir);
+      } catch {}
+    }
+  }, [identifier, currentDir]);
+
+  useEffect(() => {
+    if (identifier) {
+      try {
+        localStorage.setItem(`pterodesk_files_selected_${identifier}`, JSON.stringify(selectedFileNames));
+      } catch {}
+    }
+  }, [identifier, selectedFileNames]);
   const [fileSearch, setFileSearch] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [renameModal, setRenameModal] = useState<{ isOpen: boolean; oldName: string; newName: string }>({
@@ -449,8 +493,50 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     let cancelError: any;
 
     if (runtime?.EventsOn) {
-      cancelConsole = runtime.EventsOn(`server:console:${identifier}`, (line: string) => {
-        setConsoleLines((prev) => [...prev.slice(-400), line]);
+      cancelConsole = runtime.EventsOn(`server:console:${identifier}`, (payload: string | string[]) => {
+        const chunks = Array.isArray(payload) ? payload : [payload];
+        consolePendingRef.current.push(...chunks);
+        if (consoleFlushFrameRef.current !== null) return;
+        const flush = () => {
+          consoleFlushFrameRef.current = null;
+          const chunks = consolePendingRef.current.splice(0);
+          if (!chunks.length) return;
+          const completed: string[] = [];
+          for (const chunk of chunks) {
+            for (let i = 0; i < chunk.length; i++) {
+              const char = chunk[i];
+              if (char === '\r') {
+                // Progress bars and package managers use CR to redraw one row.
+                consoleCurrentLineRef.current = '';
+              } else if (char === '\n') {
+                completed.push(consoleCurrentLineRef.current);
+                consoleCurrentLineRef.current = '';
+              } else if (char !== '\0') {
+                consoleCurrentLineRef.current += char;
+              }
+            }
+            // Wings emits console output as logical log entries. Keep that
+            // boundary while allowing CR-terminated progress updates to redraw.
+            if (chunk.length > 0 && !chunk.endsWith('\n') && !chunk.endsWith('\r')) {
+              completed.push(consoleCurrentLineRef.current);
+              consoleCurrentLineRef.current = '';
+            }
+          }
+          const hasLiveLine = consoleCurrentLineRef.current.length > 0;
+          if (completed.length || hasLiveLine || consoleHasLiveLineRef.current) {
+            setConsoleLines((prev) => {
+              const base = consoleHasLiveLineRef.current ? prev.slice(0, -1) : prev;
+              const next = [...base, ...completed];
+              if (hasLiveLine) next.push(consoleCurrentLineRef.current);
+              return next.slice(-1000);
+            });
+            consoleHasLiveLineRef.current = hasLiveLine;
+          }
+          if (consolePendingRef.current.length) {
+            consoleFlushFrameRef.current = window.requestAnimationFrame(flush);
+          }
+        };
+        consoleFlushFrameRef.current = window.requestAnimationFrame(flush);
       });
 
       cancelStats = runtime.EventsOn(`server:stats:${identifier}`, (statsData: any) => {
@@ -510,6 +596,13 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
       if (typeof cancelStats === 'function') cancelStats();
       if (typeof cancelStatus === 'function') cancelStatus();
       if (typeof cancelError === 'function') cancelError();
+      if (consoleFlushFrameRef.current !== null) {
+        window.cancelAnimationFrame(consoleFlushFrameRef.current);
+        consoleFlushFrameRef.current = null;
+      }
+      consolePendingRef.current = [];
+      consoleCurrentLineRef.current = '';
+      consoleHasLiveLineRef.current = false;
       if (app) {
         app.DisconnectServerConsole();
       }
@@ -593,6 +686,93 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
       y,
       file,
     });
+  };
+
+  const handleEmptyContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const zoom = getZoomFactor();
+    const clickX = e.clientX / zoom;
+    const clickY = e.clientY / zoom;
+    const viewportW = window.innerWidth / zoom;
+    const viewportH = window.innerHeight / zoom;
+    const menuW = 200;
+    const menuH = 260;
+    let x = clickX;
+    let y = clickY;
+    if (x + menuW > viewportW) x = Math.max(10, viewportW - menuW - 10);
+    if (y + menuH > viewportH) y = Math.max(10, viewportH - menuH - 10);
+
+    setContextMenu({
+      isOpen: true,
+      x,
+      y,
+      file: null,
+    });
+  };
+
+  const handlePasteFile = async (targetDirectory?: string) => {
+    setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+    const destDir = targetDirectory !== undefined ? targetDirectory : currentDir;
+    const cb = getFileClipboard();
+    if (!cb) return;
+
+    // @ts-ignore
+    const app = window.go?.main?.App;
+    if (!app) return;
+
+    try {
+      if (cb.action === 'cut') {
+        const fromPath = cb.path;
+        const toPath = destDir === '/' ? `/${cb.name}` : `${destDir}/${cb.name}`;
+        if (fromPath === toPath) return;
+
+        if (sftpConnected) {
+          await app.RenameServerSFTPFile(identifier, fromPath, toPath);
+        } else {
+          await app.RenameFile(identifier, '/', fromPath, toPath);
+        }
+        addNotification({
+          type: 'success',
+          title: t('serverDetail.paste'),
+          message: t('serverDetail.pasteSuccess'),
+        });
+        clearFileClipboard();
+        loadFiles(currentDir, sftpConnected);
+      } else {
+        // copy
+        const toPath = destDir === '/' ? `/${cb.name}` : `${destDir}/${cb.name}`;
+        if (destDir === cb.sourceDir || toPath === cb.path) {
+          if (!sftpConnected) {
+            await app.CopyFile(identifier, cb.path.startsWith('/') ? cb.path : `/${cb.path}`);
+          } else {
+            const content = await app.ReadServerSFTPFile(identifier, cb.path);
+            const copyName = `${cb.name} copy`;
+            const copyPath = destDir === '/' ? `/${copyName}` : `${destDir}/${copyName}`;
+            await app.WriteServerSFTPFile(identifier, copyPath, content);
+          }
+        } else {
+          if (sftpConnected) {
+            const content = await app.ReadServerSFTPFile(identifier, cb.path);
+            await app.WriteServerSFTPFile(identifier, toPath, content);
+          } else {
+            const content = await app.GetFileContents(identifier, cb.path);
+            await app.WriteFile(identifier, toPath, content);
+          }
+        }
+        addNotification({
+          type: 'success',
+          title: t('serverDetail.paste'),
+          message: t('serverDetail.pasteSuccess'),
+        });
+        loadFiles(currentDir, sftpConnected);
+      }
+    } catch (err: any) {
+      addNotification({
+        type: 'error',
+        title: t('serverDetail.pasteFailed'),
+        message: err.message,
+      });
+    }
   };
 
   // Pre-fill SFTP credentials from server info when loaded
@@ -1195,6 +1375,12 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
       setLoadingFiles(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'files' && selectedServer) {
+      loadFiles(currentDir, sftpConnected);
+    }
+  }, [activeTab, selectedServer?.identifier]);
 
   const handleConnectSFTP = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1935,7 +2121,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 color: 'var(--color-text-muted)',
                 fontSize: '11px',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
+                transition: 'none',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.color = 'var(--color-text)';
@@ -1973,7 +2159,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               opacity: canStart ? 1 : 0.45,
             }}
           >
-            <Play size={12} /> {t('server.power.start')}
+            <Play size={12} />
           </button>
           <button
             onClick={() => sendPowerDirect('restart')}
@@ -1994,7 +2180,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               opacity: canRestart ? 1 : 0.45,
             }}
           >
-            <RotateCw size={12} /> {t('server.power.restart')}
+            <RotateCw size={12} />
           </button>
 
           {/* Adaptive Stop / Kill Button */}
@@ -2017,7 +2203,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 cursor: 'pointer',
               }}
             >
-              <Power size={12} /> {t('server.power.kill')}
+              <Power size={12} />
             </button>
           ) : (
             <button
@@ -2039,7 +2225,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 opacity: canStop ? 1 : 0.45,
               }}
             >
-              <Square size={12} /> {t('server.power.stop')}
+              <Square size={12} />
             </button>
           )}
         </div>
@@ -2340,7 +2526,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               minHeight: 0,
               display: 'flex',
               flexDirection: 'column',
-              backgroundColor: 'var(--color-bg)',
+              backgroundColor: 'var(--color-console-bg, var(--color-bg))',
               fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace",
               fontSize: '12px',
               padding: '0',
@@ -2375,11 +2561,11 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 wordBreak: 'break-word',
               }}
             >
-              {(consoleSearch
+              {getLogLineEntries(consoleSearch
                 ? consoleLines.filter((l) => l.toLowerCase().includes(consoleSearch.toLowerCase()))
                 : consoleLines
-              ).map((line, i) => (
-                <ColorizedLine key={i} line={line} />
+              ).map(({ line, key }) => (
+                <ColorizedLine key={key} line={line} />
               ))}
               <div ref={consoleEndRef} />
             </div>
@@ -2820,6 +3006,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDropFiles}
+              onContextMenu={handleEmptyContextMenu}
               className="custom-scrollbar"
               style={{
                 backgroundColor: 'var(--color-surface)',
@@ -5310,30 +5497,20 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
       )}
 
       {/* Pterodactyl-Style File Context Menu */}
-      {contextMenu.isOpen && contextMenu.file && createPortal(
+      {contextMenu.isOpen && createPortal(
         <div
+          className="context-menu-dropdown"
           style={{
             position: 'fixed',
             top: contextMenu.y,
             left: contextMenu.x,
-            zIndex: 10000,
-            width: '190px',
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '8px',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
-            padding: '4px',
-            userSelect: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2px',
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header with filename */}
+          {/* Header with filename or current dir */}
           <div
             style={{
-              padding: '6px 8px',
+              padding: '5px 8px 6px',
               borderBottom: '1px solid var(--color-border-subtle)',
               fontSize: '11px',
               fontWeight: 600,
@@ -5343,279 +5520,329 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               whiteSpace: 'nowrap',
             }}
           >
-            {contextMenu.file.name}
+            {contextMenu.file ? contextMenu.file.name : currentDir}
           </div>
 
-          {/* Edit (if file) */}
-          {!contextMenu.file.isDir && (
+          {/* When clicked on a file or folder */}
+          {contextMenu.file ? (
             <>
+              {/* Edit (if file) */}
+              {!contextMenu.file.isDir && (
+                <>
+                  <button
+                    className="context-menu-item"
+                    onClick={() => {
+                      const name = contextMenu.file!.name;
+                      setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                      handleOpenFile(name);
+                    }}
+                  >
+                    <Edit2 size={13} color="var(--color-primary-light)" />
+                    <span>{t('serverDetail.editFile')}</span>
+                  </button>
+
+                  <button
+                    className="context-menu-item"
+                    onClick={() => {
+                      const name = contextMenu.file!.name;
+                      const fullPath = currentDir === '/' ? `/${name}` : `${currentDir}/${name}`;
+                      setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                      openFileInTab(identifier, fullPath, sftpConnected);
+                    }}
+                  >
+                    <ExternalLink size={13} color="#60A5FA" />
+                    <span>{t('files.openNewTab')}</span>
+                  </button>
+                </>
+              )}
+
+              {/* Download to Desktop (if file) */}
+              {!contextMenu.file.isDir && (
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const name = contextMenu.file!.name;
+                    setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                    handleDownloadFile(name);
+                  }}
+                >
+                  <Download size={13} color="var(--color-success)" />
+                  <span>{t('serverDetail.downloadDesktop')}</span>
+                </button>
+              )}
+
+              <div className="context-menu-divider" />
+
+              {/* Copy to Clipboard */}
               <button
+                className="context-menu-item"
                 onClick={() => {
-                  const name = contextMenu.file!.name;
+                  const file = contextMenu.file!;
+                  const fullPath = currentDir === '/' ? `/${file.name}` : `${currentDir}/${file.name}`;
                   setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-                  handleOpenFile(name);
+                  setFileClipboard({
+                    action: 'copy',
+                    serverIdentifier: identifier,
+                    sourceDir: currentDir,
+                    path: fullPath,
+                    name: file.name,
+                    isDir: file.isDir,
+                  });
+                  addNotification({ type: 'info', title: t('common.copy'), message: t('serverIDE.copiedClipboard') });
                 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  width: '100%',
-                  padding: '6px 10px',
-                  borderRadius: '5px',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--color-text)',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
-                <Edit2 size={13} color="var(--color-primary-light)" />
-                <span>{t('serverDetail.editFile')}</span>
+                <Copy size={13} />
+                <span>{t('serverDetail.copy')}</span>
+                <span className="context-menu-shortcut">Ctrl+C</span>
               </button>
 
+              {/* Cut to Clipboard */}
               <button
+                className="context-menu-item"
+                onClick={() => {
+                  const file = contextMenu.file!;
+                  const fullPath = currentDir === '/' ? `/${file.name}` : `${currentDir}/${file.name}`;
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  setFileClipboard({
+                    action: 'cut',
+                    serverIdentifier: identifier,
+                    sourceDir: currentDir,
+                    path: fullPath,
+                    name: file.name,
+                    isDir: file.isDir,
+                  });
+                  addNotification({ type: 'info', title: t('serverDetail.cut'), message: t('serverDetail.cutSuccess') });
+                }}
+              >
+                <Scissors size={13} />
+                <span>{t('serverDetail.cut')}</span>
+                <span className="context-menu-shortcut">Ctrl+X</span>
+              </button>
+
+              {/* Duplicate */}
+              {!contextMenu.file.isDir && (
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const name = contextMenu.file!.name;
+                    setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                    handleCopyFile(name);
+                  }}
+                >
+                  <Copy size={13} color="var(--color-text-secondary)" />
+                  <span>{t('serverDetail.duplicate')}</span>
+                </button>
+              )}
+
+              {/* Copy Path */}
+              <button
+                className="context-menu-item"
                 onClick={() => {
                   const name = contextMenu.file!.name;
                   const fullPath = currentDir === '/' ? `/${name}` : `${currentDir}/${name}`;
                   setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-                  openFileInTab(identifier, fullPath, sftpConnected);
+                  navigator.clipboard.writeText(fullPath);
+                  addNotification({ type: 'success', title: t('serverDetail.copyPath'), message: t('serverDetail.pathCopied') });
                 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  width: '100%',
-                  padding: '6px 10px',
-                  borderRadius: '5px',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--color-text)',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
-                <ExternalLink size={13} color="#60A5FA" />
-                <span>{t('files.openNewTab')}</span>
+                <Link size={13} />
+                <span>{t('serverDetail.copyPath')}</span>
+              </button>
+
+              {/* Rename */}
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  const name = contextMenu.file!.name;
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  setRenameModal({ isOpen: true, oldName: name, newName: name });
+                }}
+              >
+                <Edit2 size={13} />
+                <span>{t('serverDetail.rename')}</span>
+              </button>
+
+              {/* Folder-specific actions */}
+              {contextMenu.file.isDir && (
+                <>
+                  <div className="context-menu-divider" />
+                  <button
+                    className="context-menu-item"
+                    disabled={!clipboard}
+                    onClick={() => {
+                      const name = contextMenu.file!.name;
+                      const targetFolder = currentDir === '/' ? `/${name}` : `${currentDir}/${name}`;
+                      handlePasteFile(targetFolder);
+                    }}
+                  >
+                    <ClipboardPaste size={13} />
+                    <span>{t('serverDetail.paste')}</span>
+                    <span className="context-menu-shortcut">Ctrl+V</span>
+                  </button>
+
+                  <button
+                    className="context-menu-item"
+                    onClick={() => {
+                      const name = contextMenu.file!.name;
+                      const targetFolder = currentDir === '/' ? `/${name}` : `${currentDir}/${name}`;
+                      setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                      setCurrentDir(targetFolder);
+                      setNewModalType('file');
+                      setNewItemName('');
+                    }}
+                  >
+                    <FilePlus size={13} color="var(--color-primary-light)" />
+                    <span>{t('serverDetail.newFile')}</span>
+                  </button>
+
+                  <button
+                    className="context-menu-item"
+                    onClick={() => {
+                      const name = contextMenu.file!.name;
+                      const targetFolder = currentDir === '/' ? `/${name}` : `${currentDir}/${name}`;
+                      setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                      setCurrentDir(targetFolder);
+                      setNewModalType('folder');
+                      setNewItemName('');
+                    }}
+                  >
+                    <FolderPlus size={13} color="#F59E0B" />
+                    <span>{t('serverDetail.newFolder')}</span>
+                  </button>
+                </>
+              )}
+
+              <div className="context-menu-divider" />
+
+              {/* Permissions (chmod) */}
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  const file = contextMenu.file!;
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  setChmodModal({ isOpen: true, fileName: file.name, mode: file.mode || '0755' });
+                }}
+              >
+                <Key size={13} />
+                <span>{t('serverDetail.permissions')}</span>
+              </button>
+
+              {/* Compress */}
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  const name = contextMenu.file!.name;
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  handleCompress([name]);
+                }}
+              >
+                <Archive size={13} />
+                <span>{t('serverDetail.archive')}</span>
+              </button>
+
+              {/* Decompress (if archive) */}
+              {/\.(tar\.gz|tgz|zip|tar|rar)$/i.test(contextMenu.file.name) && (
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const name = contextMenu.file!.name;
+                    setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                    handleDecompress(name);
+                  }}
+                >
+                  <FileArchive size={13} color="var(--color-warning)" />
+                  <span>{t('serverDetail.extract')}</span>
+                </button>
+              )}
+
+              <div className="context-menu-divider" />
+
+              {/* Delete */}
+              <button
+                className="context-menu-item danger"
+                onClick={() => {
+                  const name = contextMenu.file!.name;
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  setFileToDelete(name);
+                }}
+              >
+                <Trash2 size={13} color="var(--color-error)" />
+                <span>{t('common.delete')}</span>
+              </button>
+            </>
+          ) : (
+            /* Empty area context menu */
+            <>
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  setNewModalType('file');
+                  setNewItemName('');
+                }}
+              >
+                <FilePlus size={13} color="var(--color-primary-light)" />
+                <span>{t('serverDetail.emptyAreaNewFile')}</span>
+              </button>
+
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  setNewModalType('folder');
+                  setNewItemName('');
+                }}
+              >
+                <FolderPlus size={13} color="#F59E0B" />
+                <span>{t('serverDetail.emptyAreaNewFolder')}</span>
+              </button>
+
+              <button
+                className="context-menu-item"
+                disabled={!clipboard}
+                onClick={() => handlePasteFile(currentDir)}
+              >
+                <ClipboardPaste size={13} />
+                <span>{t('serverDetail.paste')}</span>
+                <span className="context-menu-shortcut">Ctrl+V</span>
+              </button>
+
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  setPullRemoteModal({ isOpen: true, url: '', filename: '' });
+                }}
+              >
+                <DownloadCloud size={13} color="#38BDF8" />
+                <span>{t('serverDetail.emptyAreaPull')}</span>
+              </button>
+
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  fileInputRef.current?.click();
+                }}
+              >
+                <Upload size={13} />
+                <span>{t('serverDetail.emptyAreaUpload')}</span>
+              </button>
+
+              <div className="context-menu-divider" />
+
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
+                  loadFiles(currentDir, sftpConnected);
+                }}
+              >
+                <RefreshCw size={13} />
+                <span>{t('serverDetail.emptyAreaRefresh')}</span>
               </button>
             </>
           )}
-
-          {/* Download to Desktop (if file) */}
-          {!contextMenu.file.isDir && (
-            <button
-              onClick={() => {
-                const name = contextMenu.file!.name;
-                setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-                handleDownloadFile(name);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: '6px 10px',
-                borderRadius: '5px',
-                background: 'none',
-                border: 'none',
-                color: 'var(--color-text)',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            >
-              <Download size={13} color="var(--color-success)" />
-              <span>{t('serverDetail.downloadDesktop')}</span>
-            </button>
-          )}
-
-          {/* Rename */}
-          <button
-            onClick={() => {
-              const name = contextMenu.file!.name;
-              setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-              setRenameModal({ isOpen: true, oldName: name, newName: name });
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              width: '100%',
-              padding: '6px 10px',
-              borderRadius: '5px',
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-text)',
-              fontSize: '12px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
-            <FileText size={13} />
-            <span>{t('serverDetail.rename')}</span>
-          </button>
-
-          {/* Duplicate / Copy */}
-          <button
-            onClick={() => {
-              const name = contextMenu.file!.name;
-              setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-              handleCopyFile(name);
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              width: '100%',
-              padding: '6px 10px',
-              borderRadius: '5px',
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-text)',
-              fontSize: '12px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
-            <Copy size={13} />
-            <span>{t('serverDetail.duplicate')}</span>
-          </button>
-
-          {/* Permissions (chmod) */}
-          <button
-            onClick={() => {
-              const file = contextMenu.file!;
-              setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-              setChmodModal({ isOpen: true, fileName: file.name, mode: file.mode || '0755' });
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              width: '100%',
-              padding: '6px 10px',
-              borderRadius: '5px',
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-text)',
-              fontSize: '12px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
-            <Key size={13} />
-            <span>{t('serverDetail.permissions')}</span>
-          </button>
-
-          {/* Compress */}
-          <button
-            onClick={() => {
-              const name = contextMenu.file!.name;
-              setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-              handleCompress([name]);
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              width: '100%',
-              padding: '6px 10px',
-              borderRadius: '5px',
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-text)',
-              fontSize: '12px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
-            <Archive size={13} />
-            <span>{t('serverDetail.archive')}</span>
-          </button>
-
-          {/* Decompress (if archive) */}
-          {/\.(tar\.gz|tgz|zip|tar|rar)$/i.test(contextMenu.file.name) && (
-            <button
-              onClick={() => {
-                const name = contextMenu.file!.name;
-                setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-                handleDecompress(name);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: '6px 10px',
-                borderRadius: '5px',
-                background: 'none',
-                border: 'none',
-                color: 'var(--color-text)',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            >
-              <FileArchive size={13} color="var(--color-warning)" />
-              <span>{t('serverDetail.extract')}</span>
-            </button>
-          )}
-
-          <div style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)', margin: '3px 0' }} />
-
-          {/* Delete */}
-          <button
-            onClick={() => {
-              const name = contextMenu.file!.name;
-              setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-              setFileToDelete(name);
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              width: '100%',
-              padding: '6px 10px',
-              borderRadius: '5px',
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-error)',
-              fontSize: '12px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
-            <Trash2 size={13} color="var(--color-error)" />
-            <span>{t('common.delete')}</span>
-          </button>
         </div>,
         document.body
       )}

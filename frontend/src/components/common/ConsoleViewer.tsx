@@ -47,10 +47,10 @@ function tuneColorContrast(colorStr: string): string {
  * Parses ANSI escape sequences into styled text segments with background & text styling
  */
 export function parseAnsi(rawText: string): TextSegment[] {
-  // Strip non-color control sequences (e.g. cursor moves, clear screen, screen erase)
-  const text = rawText.replace(/(?:\u001b|\x1b)\[[0-9;]*[a-ln-zA-Z]/g, '');
-
-  // Match color SGR codes: \u001b[...m or \u001b[m
+  // Preserve SGR sequences for parsing, while removing cursor/control CSI sequences.
+  const text = rawText.replace(/\x1b\[[0-9;?]*[ -/]*([@-~])/g, (sequence, final: string) =>
+    final === 'm' ? sequence : ''
+  );
   const regex = /(?:\u001b|\x1b)\[([0-9;]*)m/g;
   const segments: TextSegment[] = [];
   let lastIndex = 0;
@@ -99,31 +99,26 @@ export function parseAnsi(rawText: string): TextSegment[] {
           currentColor = undefined;
         } else if (code === 49) {
           currentBgColor = undefined;
+        } else if (code === 2) {
+          // Dim text remains readable in both themes.
+          isBold = false;
         } else if (ANSI_COLORS[code]) {
           currentColor = tuneColorContrast(ANSI_COLORS[code]);
         } else if (code >= 40 && code <= 47) {
           // Standard Background Colors (40-47)
           const fgCode = code - 10;
           currentBgColor = ANSI_COLORS[fgCode];
-        } else if (code === 38 && codes[i + 1] === 5 && codes[i + 2] !== undefined) {
-          // 256 colors foreground: 38;5;n
-          const colorCode = codes[i + 2];
-          if (colorCode < 16 && ANSI_COLORS[colorCode + 30]) {
-            currentColor = tuneColorContrast(ANSI_COLORS[colorCode + 30]);
-          } else {
-            currentColor = '#38BDF8';
-          }
+        } else if (code >= 100 && code <= 107) {
+          currentBgColor = ANSI_COLORS[code - 10];
+        } else if ((code === 38 || code === 48) && codes[i + 1] === 5 && codes[i + 2] !== undefined) {
+          const color = xtermColor(codes[i + 2]);
+          if (code === 38) currentColor = tuneColorContrast(color);
+          else currentBgColor = color;
           i += 2;
-        } else if (code === 48 && codes[i + 1] === 5 && codes[i + 2] !== undefined) {
-          // 256 colors background: 48;5;n
-          currentBgColor = 'rgba(255, 255, 255, 0.1)';
-          i += 2;
-        } else if (code === 38 && codes[i + 1] === 2 && codes[i + 4] !== undefined) {
-          // 24-bit TrueColor: 38;2;r;g;b
-          const r = codes[i + 2];
-          const g = codes[i + 3];
-          const b = codes[i + 4];
-          currentColor = `rgb(${r}, ${g}, ${b})`;
+        } else if ((code === 38 || code === 48) && codes[i + 1] === 2 && codes[i + 4] !== undefined) {
+          const color = `rgb(${codes[i + 2]}, ${codes[i + 3]}, ${codes[i + 4]})`;
+          if (code === 38) currentColor = color;
+          else currentBgColor = color;
           i += 4;
         }
       }
@@ -143,6 +138,18 @@ export function parseAnsi(rawText: string): TextSegment[] {
   }
 
   return segments;
+}
+
+function xtermColor(index: number): string {
+  const palette = ['#000000', '#800000', '#008000', '#808000', '#000080', '#800080', '#008080', '#c0c0c0', '#808080', '#ff0000', '#00ff00', '#ffff00', '#0000ff', '#ff00ff', '#00ffff', '#ffffff'];
+  if (index < 16) return palette[index] || '#ffffff';
+  if (index < 232) {
+    const n = index - 16;
+    const level = [0, 95, 135, 175, 215, 255];
+    return `rgb(${level[Math.floor(n / 36)]}, ${level[Math.floor((n % 36) / 6)]}, ${level[n % 6]})`;
+  }
+  const gray = 8 + (index - 232) * 10;
+  return `rgb(${gray}, ${gray}, ${gray})`;
 }
 
 /**
@@ -184,7 +191,7 @@ const RenderWithLinks: React.FC<{ text: string }> = ({ text }) => {
 /**
  * Checks if line contains ANSI codes; if not, applies intelligent log-level coloring & contrast
  */
-export const ColorizedLine: React.FC<{ line: string }> = ({ line }) => {
+export const ColorizedLine = React.memo<{ line: string }>(({ line }) => {
   // If line has ANSI escape codes, parse them directly
   if (line.includes('\u001b') || line.includes('\x1b')) {
     const segments = parseAnsi(line);
@@ -315,7 +322,16 @@ export const ColorizedLine: React.FC<{ line: string }> = ({ line }) => {
       <RenderWithLinks text={line} />
     </div>
   );
-};
+});
+
+export function getLogLineEntries(lines: string[]): Array<{ key: string; line: string }> {
+  const occurrences = new Map<string, number>();
+  return lines.map((line) => {
+    const occurrence = occurrences.get(line) || 0;
+    occurrences.set(line, occurrence + 1);
+    return { key: `${line}\u0000${occurrence}`, line };
+  });
+}
 
 /**
  * Smart Minimalist Console Toolbar Component with Clear, Auto-scroll, and Search

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Editor, { loader } from '@monaco-editor/react';
 // @ts-ignore
 import * as monaco from 'monaco-editor';
@@ -7,6 +8,7 @@ import {
   Folder,
   FolderOpen,
   FileCode2,
+  FileText,
   Terminal,
   RefreshCw,
   Save,
@@ -26,12 +28,28 @@ import {
   Unlock,
   ChevronUp,
   Trash2,
+  Copy,
+  Scissors,
+  ClipboardPaste,
+  Edit2,
+  Download,
+  DownloadCloud,
+  Upload,
+  Link,
+  Check,
 } from 'lucide-react';
 import { detectLanguage } from './PteroMonacoEditor';
-import { ColorizedLine } from './ConsoleViewer';
+import { ColorizedLine, getLogLineEntries } from './ConsoleViewer';
+import { ConfirmDialog } from './ConfirmDialog';
 import { useUIStore } from '../../stores/uiStore';
 import { Server } from '../../stores/serverStore';
 import { useI18n } from '../../i18n';
+import {
+  useFileClipboard,
+  setFileClipboard,
+  clearFileClipboard,
+  getFileClipboard,
+} from '../../utils/fileClipboard';
 
 loader.config({ monaco });
 
@@ -68,6 +86,7 @@ interface SavedIDEState {
   tabs: Array<{ path: string; name: string; language: string }>;
   activeTabPath: string | null;
   expandedPaths: string[];
+  selectedPath?: string | null;
   sidebarWidth: number;
   terminalSize: number;
   terminalOrientation: 'bottom' | 'right';
@@ -86,6 +105,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
 }) => {
   const { addNotification } = useUIStore();
   const { t } = useI18n();
+  const clipboard = useFileClipboard();
   const storageKey = `pterodesk_ide_v2_${serverIdentifier}`;
 
   // Load initial persisted configuration
@@ -112,9 +132,81 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
   // File tree state
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<string[]>(savedState?.expandedPaths || []);
+  const [selectedPath, setSelectedPath] = useState<string | null>(savedState?.selectedPath || null);
   const [loadingRoot, setLoadingRoot] = useState(true);
   const [searchFilter, setSearchFilter] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    node: FileNode | null;
+    parentDir: string;
+  }>({
+    isOpen: false,
+    x: 0,
+    y: 0,
+    node: null,
+    parentDir: '',
+  });
+
+  // Modals & Action States
+  const [renameModal, setRenameModal] = useState<{
+    isOpen: boolean;
+    path: string;
+    oldName: string;
+    newName: string;
+    parentDir: string;
+  }>({
+    isOpen: false,
+    path: '',
+    oldName: '',
+    newName: '',
+    parentDir: '',
+  });
+
+  const [pullModal, setPullModal] = useState<{
+    isOpen: boolean;
+    targetDir: string;
+    url: string;
+    filename: string;
+  }>({
+    isOpen: false,
+    targetDir: '',
+    url: '',
+    filename: '',
+  });
+
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean;
+    path: string;
+    name: string;
+    isDir: boolean;
+  }>({
+    isOpen: false,
+    path: '',
+    name: '',
+    isDir: false,
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTargetDir, setUploadTargetDir] = useState<string>('');
+
+  // Close context menu on global click or context menu outside
+  useEffect(() => {
+    const handleCloseMenu = () => {
+      if (contextMenu.isOpen) {
+        setContextMenu((prev) => ({ ...prev, isOpen: false }));
+      }
+    };
+    window.addEventListener('click', handleCloseMenu);
+    return () => {
+      window.removeEventListener('click', handleCloseMenu);
+    };
+  }, [contextMenu.isOpen]);
 
   // Editor Tabs state
   const [tabs, setTabs] = useState<IDETab[]>([]);
@@ -146,13 +238,14 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
   // Active tab getter
   const activeTab = tabs.find((t) => t.path === activeTabPath);
 
-  // Persist IDE layout and tabs memory
+  // Persist IDE layout, tabs, expanded folders, and selected file
   useEffect(() => {
     try {
       const stateToSave: SavedIDEState = {
         tabs: tabs.map((t) => ({ path: t.path, name: t.name, language: t.language })),
         activeTabPath,
         expandedPaths,
+        selectedPath,
         sidebarWidth,
         terminalSize,
         terminalOrientation,
@@ -166,6 +259,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
     tabs,
     activeTabPath,
     expandedPaths,
+    selectedPath,
     sidebarWidth,
     terminalSize,
     terminalOrientation,
@@ -453,7 +547,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
   // Terminal scroll to bottom
   useEffect(() => {
     if (terminalOpen) {
-      terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      terminalEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }
   }, [consoleLines, terminalOpen]);
 
@@ -546,6 +640,247 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
     }
   };
 
+  const getParentDir = (filePath: string): string => {
+    const parts = filePath.replace(/^\/+|\/+$/g, '').split('/');
+    if (parts.length <= 1) return '';
+    parts.pop();
+    return parts.join('/');
+  };
+
+  const handleNodeContextMenu = (e: React.MouseEvent, node: FileNode) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedPath(node.path);
+    const parent = node.isDir ? node.path : getParentDir(node.path);
+    const x = Math.min(e.clientX, window.innerWidth - 220);
+    const y = Math.min(e.clientY, window.innerHeight - 340);
+    setContextMenu({
+      isOpen: true,
+      x,
+      y,
+      node,
+      parentDir: parent,
+    });
+  };
+
+  const handleTreeContainerContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const x = Math.min(e.clientX, window.innerWidth - 220);
+    const y = Math.min(e.clientY, window.innerHeight - 300);
+    setContextMenu({
+      isOpen: true,
+      x,
+      y,
+      node: null,
+      parentDir: '',
+    });
+  };
+
+  const handleDownloadFile = async (filePath: string, fileName: string) => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+    try {
+      // @ts-ignore
+      const app = window.go?.main?.App;
+      if (app?.DownloadServerFileWithDialog) {
+        const savedPath = await app.DownloadServerFileWithDialog(serverIdentifier, filePath, fileName);
+        if (savedPath) {
+          addNotification({
+            type: 'success',
+            title: t('serverIDE.downloadSuccess'),
+            message: savedPath,
+          });
+        }
+      } else if (app?.GetFileDownloadURL) {
+        const url = await app.GetFileDownloadURL(serverIdentifier, filePath);
+        window.open(url, '_blank');
+        addNotification({
+          type: 'success',
+          title: t('serverIDE.downloadSuccess'),
+          message: fileName,
+        });
+      }
+    } catch (err: any) {
+      addNotification({
+        type: 'error',
+        title: t('serverIDE.downloadFailed'),
+        message: err.message,
+      });
+    }
+  };
+
+  const handlePaste = async (targetDir: string) => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+    const cb = getFileClipboard();
+    if (!cb) return;
+
+    // @ts-ignore
+    const app = window.go?.main?.App;
+    if (!app) return;
+
+    try {
+      const targetPath = targetDir ? `${targetDir}/${cb.name}` : cb.name;
+      if (cb.action === 'cut') {
+        if (targetPath === cb.path) return;
+        await app.RenameFile(serverIdentifier, '/', cb.path, targetPath);
+        clearFileClipboard();
+        addNotification({
+          type: 'success',
+          title: t('serverIDE.paste'),
+          message: t('serverIDE.pasteSuccess', { name: cb.name }),
+        });
+      } else {
+        if (targetDir === cb.sourceDir || targetPath === cb.path) {
+          await app.CopyFile(serverIdentifier, cb.path.startsWith('/') ? cb.path : `/${cb.path}`);
+        } else {
+          const content = await app.GetFileContents(serverIdentifier, cb.path);
+          await app.WriteFile(serverIdentifier, targetPath, content || '');
+        }
+        addNotification({
+          type: 'success',
+          title: t('serverIDE.copy'),
+          message: t('serverIDE.pasteSuccess', { name: cb.name }),
+        });
+      }
+      loadRootFiles();
+    } catch (err: any) {
+      addNotification({
+        type: 'error',
+        title: t('serverIDE.pasteFailed'),
+        message: err.message,
+      });
+    }
+  };
+
+  const handleConfirmRename = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // @ts-ignore
+    const app = window.go?.main?.App;
+    if (!app) return;
+    const { parentDir, oldName, newName } = renameModal;
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+
+    try {
+      const oldRel = parentDir ? `${parentDir}/${oldName}` : oldName;
+      const newRel = parentDir ? `${parentDir}/${trimmed}` : trimmed;
+      await app.RenameFile(serverIdentifier, '/', oldRel, newRel);
+      addNotification({
+        type: 'success',
+        title: t('serverIDE.renameSuccess'),
+        message: t('serverDetail.renamedMessage', { name: trimmed }),
+      });
+      setTabs((prev) =>
+        prev.map((tab) => {
+          if (tab.path === oldRel) {
+            return { ...tab, path: newRel, name: trimmed, language: detectLanguage(trimmed) };
+          }
+          return tab;
+        })
+      );
+      if (activeTabPath === oldRel) {
+        setActiveTabPath(newRel);
+      }
+      setRenameModal((prev) => ({ ...prev, isOpen: false }));
+      loadRootFiles();
+    } catch (err: any) {
+      addNotification({
+        type: 'error',
+        title: t('serverIDE.renameFailed'),
+        message: err.message,
+      });
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      // @ts-ignore
+      const app = window.go?.main?.App;
+      const parent = getParentDir(deleteDialog.path);
+      await app.DeleteFiles(serverIdentifier, parent ? `/${parent}` : '/', [deleteDialog.name]);
+      addNotification({
+        type: 'success',
+        title: t('serverDetail.deleted'),
+        message: t('serverDetail.deletedMessage', { name: deleteDialog.name }),
+      });
+      setTabs((prev) => prev.filter((t) => t.path !== deleteDialog.path));
+      if (activeTabPath === deleteDialog.path) {
+        setActiveTabPath(null);
+      }
+      setDeleteDialog((prev) => ({ ...prev, isOpen: false }));
+      loadRootFiles();
+    } catch (err: any) {
+      addNotification({
+        type: 'error',
+        title: t('serverDetail.deleteFailed'),
+        message: err.message,
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleConfirmPull = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pullModal.url.trim()) return;
+    try {
+      // @ts-ignore
+      const app = window.go?.main?.App;
+      await app.PullRemoteFile(
+        serverIdentifier,
+        pullModal.targetDir ? `/${pullModal.targetDir}` : '/',
+        pullModal.url.trim(),
+        pullModal.filename.trim()
+      );
+      addNotification({
+        type: 'success',
+        title: t('serverDetail.pullStarted'),
+        message: t('serverDetail.pullMessage', { url: pullModal.url }),
+      });
+      setPullModal((prev) => ({ ...prev, isOpen: false, url: '', filename: '' }));
+      loadRootFiles();
+    } catch (err: any) {
+      addNotification({
+        type: 'error',
+        title: t('serverDetail.pullFailed'),
+        message: err.message,
+      });
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    // @ts-ignore
+    const app = window.go?.main?.App;
+    if (!app) return;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const res = reader.result as string;
+        const base64 = res.split(',')[1] || res;
+        try {
+          await app.UploadServerFileDirect(serverIdentifier, uploadTargetDir ? `/${uploadTargetDir}` : '/', file.name, base64);
+          addNotification({
+            type: 'success',
+            title: t('serverDetail.uploadFinished'),
+            message: t('serverDetail.uploadMessage', { name: file.name }),
+          });
+          loadRootFiles();
+        } catch (err: any) {
+          addNotification({
+            type: 'error',
+            title: t('serverDetail.uploadFailed'),
+            message: err.message,
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   // Dragging Resizer Logic
   const handleSidebarMouseDown = (e: React.MouseEvent) => {
     if (isLayoutLocked) return;
@@ -604,18 +939,20 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
     if (searchFilter && !node.name.toLowerCase().includes(searchFilter.toLowerCase())) {
       return null;
     }
-    const isSelected = activeTabPath === node.path;
+    const isSelected = selectedPath === node.path || activeTabPath === node.path;
 
     return (
       <div key={node.path}>
         <div
           onClick={() => {
+            setSelectedPath(node.path);
             if (node.isDir) {
               toggleNodeExpansion(node);
             } else {
               handleOpenFile(node.path, node.name);
             }
           }}
+          onContextMenu={(e) => handleNodeContextMenu(e, node)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -806,9 +1143,9 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                 wordBreak: 'break-word',
               }}
             >
-              {consoleLines.map((line, idx) => (
+              {getLogLineEntries(consoleLines).map(({ line, key }) => (
                 <div
-                  key={idx}
+                  key={key}
                   style={{
                     minHeight: '18px',
                     wordBreak: 'break-word',
@@ -1040,15 +1377,26 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
             )}
 
             {/* Tree nodes */}
-            <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '6px 4px' }}>
+            <div
+              className="custom-scrollbar"
+              onContextMenu={handleTreeContainerContextMenu}
+              style={{ flex: 1, overflowY: 'auto', padding: '6px 4px' }}
+            >
               {loadingRoot ? (
                 <div style={{ padding: '20px', textAlign: 'center', fontSize: '11px', color: 'var(--color-text-muted)' }}>
                   <RefreshCw size={16} className="animate-spin" style={{ margin: '0 auto 6px' }} />
                   Đang tải cấu trúc tệp...
                 </div>
               ) : fileTree.length === 0 ? (
-                <div style={{ padding: '20px', textAlign: 'center', fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                  Thư mục trống
+                <div
+                  onContextMenu={handleTreeContainerContextMenu}
+                  style={{ padding: '24px 12px', textAlign: 'center', fontSize: '11px', color: 'var(--color-text-muted)', cursor: 'default' }}
+                >
+                  <FolderTree size={28} color="var(--color-text-muted)" style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                  <div>{t('serverIDE.emptyDirectory')}</div>
+                  <div style={{ fontSize: '10px', marginTop: '4px', opacity: 0.7 }}>
+                    {t('serverIDE.emptyAreaTip')}
+                  </div>
                 </div>
               ) : (
                 fileTree.map((node) => renderTreeItem(node, 0))
@@ -1394,6 +1742,629 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
           {renderTerminalContent()}
         </div>
       )}
+
+      {/* Hidden file upload input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        multiple
+        style={{ display: 'none' }}
+      />
+
+      {/* Rename Modal */}
+      {renameModal.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setRenameModal((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: '8px',
+              padding: '20px',
+              width: '380px',
+              maxWidth: '90vw',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)', marginBottom: '12px' }}>
+              {t('serverIDE.renameTitle')}
+            </h3>
+            <form onSubmit={handleConfirmRename}>
+              <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                {t('serverIDE.renamePrompt', { name: renameModal.oldName })}
+              </p>
+              <input
+                type="text"
+                autoFocus
+                value={renameModal.newName}
+                onChange={(e) => setRenameModal((prev) => ({ ...prev, newName: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  backgroundColor: 'var(--color-bg)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '6px',
+                  color: 'var(--color-text)',
+                  fontSize: '13px',
+                  outline: 'none',
+                  marginBottom: '16px',
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setRenameModal((prev) => ({ ...prev, isOpen: false }))}
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text-secondary)',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  {t('common.discard')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={!renameModal.newName.trim() || renameModal.newName === renameModal.oldName}
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: 'var(--color-primary)',
+                    border: 'none',
+                    color: '#fff',
+                    borderRadius: '5px',
+                    cursor:
+                      !renameModal.newName.trim() || renameModal.newName === renameModal.oldName
+                        ? 'not-allowed'
+                        : 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                  }}
+                >
+                  {t('serverIDE.rename')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Pull Remote Modal */}
+      {pullModal.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setPullModal((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: '8px',
+              padding: '20px',
+              width: '420px',
+              maxWidth: '90vw',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)', marginBottom: '8px' }}>
+              {t('serverIDE.pullRemoteTitle')}
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '14px' }}>
+              {t('serverIDE.pullRemoteDesc', { dir: pullModal.targetDir || '/' })}
+            </p>
+            <form onSubmit={handleConfirmPull}>
+              <div style={{ marginBottom: '12px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--color-text-secondary)',
+                    marginBottom: '4px',
+                  }}
+                >
+                  {t('serverIDE.pullRemoteUrl')}
+                </label>
+                <input
+                  type="url"
+                  autoFocus
+                  required
+                  placeholder="https://example.com/file.zip"
+                  value={pullModal.url}
+                  onChange={(e) => setPullModal((prev) => ({ ...prev, url: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    backgroundColor: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '6px',
+                    color: 'var(--color-text)',
+                    fontSize: '12px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--color-text-secondary)',
+                    marginBottom: '4px',
+                  }}
+                >
+                  {t('serverIDE.pullRemoteFilename')}
+                </label>
+                <input
+                  type="text"
+                  placeholder="plugin.jar"
+                  value={pullModal.filename}
+                  onChange={(e) => setPullModal((prev) => ({ ...prev, filename: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    backgroundColor: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '6px',
+                    color: 'var(--color-text)',
+                    fontSize: '12px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setPullModal((prev) => ({ ...prev, isOpen: false }))}
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text-secondary)',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  {t('common.discard')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={!pullModal.url.trim()}
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: 'var(--color-primary)',
+                    border: 'none',
+                    color: '#fff',
+                    borderRadius: '5px',
+                    cursor: !pullModal.url.trim() ? 'not-allowed' : 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                  }}
+                >
+                  {t('serverDetail.startPull')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        title={t('serverIDE.deleteConfirmTitle')}
+        message={t('serverIDE.deleteConfirmMessage', { name: deleteDialog.name })}
+        confirmLabel={t('serverIDE.delete')}
+        isDestructive={true}
+        isLoading={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Context Menu */}
+      {contextMenu.isOpen &&
+        createPortal(
+          <div
+            className="context-menu-dropdown"
+            style={{
+              position: 'fixed',
+              top: `${contextMenu.y}px`,
+              left: `${contextMenu.x}px`,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '4px 8px 6px',
+                borderBottom: '1px solid var(--color-border-subtle)',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--color-text-muted)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {contextMenu.node ? contextMenu.node.name : contextMenu.parentDir || '/'}
+            </div>
+
+            {/* If clicked on a file */}
+            {contextMenu.node && !contextMenu.node.isDir && (
+              <>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    handleOpenFile(node.path, node.name);
+                  }}
+                >
+                  <FileText size={13} color="#60A5FA" />
+                  <span>{t('serverIDE.open')}</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setFileClipboard({
+                      action: 'copy',
+                      serverIdentifier,
+                      sourceDir: getParentDir(node.path),
+                      path: node.path,
+                      name: node.name,
+                      isDir: false,
+                    });
+                    addNotification({
+                      type: 'info',
+                      title: t('serverIDE.copy'),
+                      message: t('serverIDE.copiedClipboard'),
+                    });
+                  }}
+                >
+                  <Copy size={13} />
+                  <span>{t('serverIDE.copy')}</span>
+                  <span className="context-menu-shortcut">Ctrl+C</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setFileClipboard({
+                      action: 'cut',
+                      serverIdentifier,
+                      sourceDir: getParentDir(node.path),
+                      path: node.path,
+                      name: node.name,
+                      isDir: false,
+                    });
+                    addNotification({
+                      type: 'info',
+                      title: t('serverIDE.cut'),
+                      message: t('serverIDE.cutClipboard'),
+                    });
+                  }}
+                >
+                  <Scissors size={13} />
+                  <span>{t('serverIDE.cut')}</span>
+                  <span className="context-menu-shortcut">Ctrl+X</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    navigator.clipboard.writeText(node.path);
+                    addNotification({
+                      type: 'success',
+                      title: t('serverIDE.copyPath'),
+                      message: t('serverIDE.pathCopied'),
+                    });
+                  }}
+                >
+                  <Link size={13} />
+                  <span>{t('serverIDE.copyPath')}</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setRenameModal({
+                      isOpen: true,
+                      path: node.path,
+                      oldName: node.name,
+                      newName: node.name,
+                      parentDir: getParentDir(node.path),
+                    });
+                  }}
+                >
+                  <Edit2 size={13} />
+                  <span>{t('serverIDE.rename')}</span>
+                  <span className="context-menu-shortcut">F2</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    handleDownloadFile(node.path, node.name);
+                  }}
+                >
+                  <Download size={13} color="var(--color-success)" />
+                  <span>{t('serverIDE.downloadDesktop')}</span>
+                </button>
+
+                <div className="context-menu-divider" />
+
+                <button
+                  className="context-menu-item danger"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setDeleteDialog({
+                      isOpen: true,
+                      path: node.path,
+                      name: node.name,
+                      isDir: false,
+                    });
+                  }}
+                >
+                  <Trash2 size={13} color="var(--color-error)" />
+                  <span>{t('serverIDE.delete')}</span>
+                </button>
+              </>
+            )}
+
+            {/* If clicked on a directory */}
+            {contextMenu.node && contextMenu.node.isDir && (
+              <>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setCreatingType('file');
+                    setCreatingTargetDir(node.path);
+                    setNewEntryName('');
+                  }}
+                >
+                  <FilePlus size={13} color="var(--color-primary-light)" />
+                  <span>{t('serverIDE.newFileInFolder')}</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setCreatingType('folder');
+                    setCreatingTargetDir(node.path);
+                    setNewEntryName('');
+                  }}
+                >
+                  <FolderPlus size={13} color="#F59E0B" />
+                  <span>{t('serverIDE.newFolderInFolder')}</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  disabled={!clipboard || clipboard.serverIdentifier !== serverIdentifier}
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    handlePaste(node.path);
+                  }}
+                >
+                  <ClipboardPaste size={13} />
+                  <span>{t('serverIDE.paste')}</span>
+                  <span className="context-menu-shortcut">Ctrl+V</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setPullModal({
+                      isOpen: true,
+                      targetDir: node.path,
+                      url: '',
+                      filename: '',
+                    });
+                  }}
+                >
+                  <DownloadCloud size={13} color="#38BDF8" />
+                  <span>{t('serverIDE.pullRemote')}</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setUploadTargetDir(node.path);
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  <Upload size={13} />
+                  <span>{t('serverIDE.uploadFile')}</span>
+                </button>
+
+                <div className="context-menu-divider" />
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    navigator.clipboard.writeText(node.path);
+                    addNotification({
+                      type: 'success',
+                      title: t('serverIDE.copyPath'),
+                      message: t('serverIDE.pathCopied'),
+                    });
+                  }}
+                >
+                  <Link size={13} />
+                  <span>{t('serverIDE.copyPath')}</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setRenameModal({
+                      isOpen: true,
+                      path: node.path,
+                      oldName: node.name,
+                      newName: node.name,
+                      parentDir: getParentDir(node.path),
+                    });
+                  }}
+                >
+                  <Edit2 size={13} />
+                  <span>{t('serverIDE.rename')}</span>
+                </button>
+
+                <div className="context-menu-divider" />
+
+                <button
+                  className="context-menu-item danger"
+                  onClick={() => {
+                    const node = contextMenu.node!;
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setDeleteDialog({
+                      isOpen: true,
+                      path: node.path,
+                      name: node.name,
+                      isDir: true,
+                    });
+                  }}
+                >
+                  <Trash2 size={13} color="var(--color-error)" />
+                  <span>{t('serverIDE.delete')}</span>
+                </button>
+              </>
+            )}
+
+            {/* If right-clicked on empty area */}
+            {!contextMenu.node && (
+              <>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setCreatingType('file');
+                    setCreatingTargetDir('');
+                    setNewEntryName('');
+                  }}
+                >
+                  <FilePlus size={13} color="var(--color-primary-light)" />
+                  <span>{t('serverIDE.newFile')}</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setCreatingType('folder');
+                    setCreatingTargetDir('');
+                    setNewEntryName('');
+                  }}
+                >
+                  <FolderPlus size={13} color="#F59E0B" />
+                  <span>{t('serverIDE.newFolder')}</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  disabled={!clipboard || clipboard.serverIdentifier !== serverIdentifier}
+                  onClick={() => handlePaste('')}
+                >
+                  <ClipboardPaste size={13} />
+                  <span>{t('serverIDE.paste')}</span>
+                  <span className="context-menu-shortcut">Ctrl+V</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setPullModal({
+                      isOpen: true,
+                      targetDir: '',
+                      url: '',
+                      filename: '',
+                    });
+                  }}
+                >
+                  <DownloadCloud size={13} color="#38BDF8" />
+                  <span>{t('serverIDE.pullRemote')}</span>
+                </button>
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    setUploadTargetDir('');
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  <Upload size={13} />
+                  <span>{t('serverIDE.uploadFile')}</span>
+                </button>
+
+                <div className="context-menu-divider" />
+
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                    loadRootFiles();
+                  }}
+                >
+                  <RefreshCw size={13} />
+                  <span>{t('serverIDE.refreshTree')}</span>
+                </button>
+              </>
+            )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

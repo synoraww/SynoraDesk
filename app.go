@@ -32,10 +32,10 @@ import (
 // DetachedWindowConfig holds settings for a detached standalone window
 type DetachedWindowConfig struct {
 	IsDetached bool   `json:"isDetached"`
-	Type       string `json:"type"`       // "server", "file-editor", "nodes", "settings", "apikeys", "ide", etc.
-	Server     string `json:"server"`     // server identifier
-	Subtab     string `json:"subtab"`     // console, files, startup, etc.
-	FilePath   string `json:"filePath"`   // for file editor
+	Type       string `json:"type"`     // "server", "file-editor", "nodes", "settings", "apikeys", "ide", etc.
+	Server     string `json:"server"`   // server identifier
+	Subtab     string `json:"subtab"`   // console, files, startup, etc.
+	FilePath   string `json:"filePath"` // for file editor
 	IsSFTP     bool   `json:"isSftp"`
 	Title      string `json:"title"`
 }
@@ -1322,7 +1322,6 @@ func (a *App) CreateServerSFTPFolder(serverID, path string) error {
 	return cli.CreateDirectory(path)
 }
 
-
 // UploadServerSFTPFile uploads base64 data to remote path via SFTP
 func (a *App) UploadServerSFTPFile(serverID, path, base64Content string) error {
 	cli, err := a.sftpSessions.Get(serverID)
@@ -1435,14 +1434,37 @@ func (a *App) CloseDatabase() error {
 type consoleListener struct {
 	ctx      context.Context
 	serverID string
+	mu       sync.Mutex
+	pending  []string
+	timer    *time.Timer
 }
 
 func (cl *consoleListener) OnConsoleOutput(line string) {
-	runtime.EventsEmit(cl.ctx, "console:output", map[string]string{
-		"server_id": cl.serverID,
-		"line":      line,
-	})
-	runtime.EventsEmit(cl.ctx, fmt.Sprintf("server:console:%s", cl.serverID), line)
+	cl.mu.Lock()
+	cl.pending = append(cl.pending, line)
+	if cl.timer == nil {
+		cl.timer = time.AfterFunc(20*time.Millisecond, cl.flushConsoleOutput)
+	}
+	cl.mu.Unlock()
+}
+
+func (cl *consoleListener) flushConsoleOutput() {
+	cl.mu.Lock()
+	lines := cl.pending
+	cl.pending = nil
+	cl.timer = nil
+	cl.mu.Unlock()
+
+	for len(lines) > 0 {
+		count := min(len(lines), 256)
+		batch := append([]string(nil), lines[:count]...)
+		lines = lines[count:]
+		runtime.EventsEmit(cl.ctx, "console:output", map[string]interface{}{
+			"server_id": cl.serverID,
+			"lines":     batch,
+		})
+		runtime.EventsEmit(cl.ctx, fmt.Sprintf("server:console:%s", cl.serverID), batch)
+	}
 }
 
 func (cl *consoleListener) OnStats(statsJSON string) {
@@ -1970,7 +1992,6 @@ func (a *App) DownloadServerFileWithDialog(identifier, filePath, defaultFileName
 	a.logActivity("", "", identifier, "file:download_dialog", "success", fmt.Sprintf("Downloaded %s to %s", filePath, targetPath))
 	return targetPath, nil
 }
-
 
 // --- Discovery, Capabilities & Permissions Bindings ---
 

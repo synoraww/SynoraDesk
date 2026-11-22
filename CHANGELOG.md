@@ -2,6 +2,47 @@
 
 All notable changes to the SynoraDesk (PteroDesk) project will be documented in this file.
 
+## [1.0.4A] - 2026-11-22
+
+### High-Performance Console Streaming, Global File Clipboard & IDE Enhancements
+
+#### Added
+- **High-Performance Console Log Batching & ANSI Parser**:
+  - Go backend throttled console output batching (20ms debounce / 256 lines per batch) to eliminate IPC bottleneck during heavy server start logs.
+  - Frontend `requestAnimationFrame` queue to prevent main thread freezing during high-throughput console streaming.
+  - Full 24-bit TrueColor RGB (`38;2;r;g;b`) and 256-color xterm palette ANSI parser with automatic contrast tuning.
+  - `React.memo` colorized log lines and unique keyed occurrences for instant, smooth rendering.
+  - Fast scroll-to-bottom performance bypassing slow DOM ref queries.
+- **Global File Clipboard & Management System (`fileClipboard.ts`)**:
+  - System-wide clipboard support for file/folder Copy and Cut actions across folders and servers.
+  - Context menu and keyboard shortcuts integration in File Manager and ServerIDE.
+  - Toast notifications confirming copy/cut/paste actions.
+- **ServerIDE Enhancements**:
+  - Full-featured multi-tab file explorer tree with direct copy, cut, paste, delete, and duplicate actions.
+  - Monaco editor state preservation and instant remote file synchronization.
+- **Installer & Terms of Service Update**:
+  - Updated WiX Toolset v7 installer with refined EULA terms affirming Zero Telemetry and complete data privacy.
+
+---
+
+## [1.0.3A] - 2026-11-19
+
+### WiX Toolset MSI Installer Pipeline, Multi-Tab Deduplication & Runtime Diagnostics
+
+#### Added
+- **Official Windows Installer Package (`.msi`)**:
+  - Built with WiX Toolset v7 (`WixUI_InstallDir`) with 64-bit Program Files architecture.
+  - Desktop and Start Menu shortcut generation.
+  - Post-install optional application launch checkbox.
+- **Multi-Tab Deduplication & Single Instance Guard**:
+  - Cross-tab communication preventing duplicate active sessions and conflicting WebSocket connections.
+- **System Diagnostics Modal**:
+  - Detailed diagnostic inspection reporting Windows build (`CurrentBuild.UBR`), CPU core count, Edge WebView2 runtime version, and SQLite WAL status.
+- **Fixed AppData Storage**:
+  - Relocated user data and WebView2 cache strictly to `%APPDATA%\SynoraDesk` to prevent executable locking.
+
+---
+
 ## [1.0.2A] - 2026-11-19
 
 ### Major Update: Passcode Security, Wallpaper Studio, Frameless Controls & AI-Assisted Architecture
