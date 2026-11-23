@@ -7,8 +7,7 @@ Các bản cập nhật bảo mật và bản vá lỗ hổng bảo mật đư�
 | Phiên bản | Trạng thái | Hỗ trợ bảo mật | Hành động được đề xuất |
 | :--- | :--- | :--- | :--- |
 | **v1.04A** | **Ổn định hiện tại** | ✅ **Hỗ trợ đầy đủ tích cực** | Đề xuất cho tất cả người dùng |
-| **v1.0.x - v1.03A** | Không dùng nữa | ⚠️ Chỉ sửa lỗi nghiêm trọng | Nâng cấp lên v1.04A hoặc mới hơn |
-| **< v1.0.0** | Không được hỗ trợ | ❌ Đã hết vòng đời (EOL) | Không được hỗ trợ |
+| **< v1.0.4A** | Không được hỗ trợ | ❌ Đã hết vòng đời (EOL) | Không được hỗ trợ |
 
 ---
 
@@ -29,11 +28,6 @@ Chúng tôi coi trọng vấn đề bảo mật của SynoraDesk và người d�
 2. Hướng dẫn sao chép từng bước hoặc Bằng chứng khái niệm (PoC) tối thiểu.
 3. (Các) thành phần bị ảnh hưởng (ví dụ: mã hóa DPAPI, cơ chế khóa, ứng dụng khách WebSocket, công cụ SFTP).
 4. Chi tiết về môi trường (phiên bản Windows, phiên bản thời gian chạy WebView2, phiên bản xây dựng SynoraDesk).
-
-### Phản hồi SLA & Dòng thời gian
-- **Xác nhận ban đầu**: Trong vòng **24 đến 48 giờ**.
-- **Đánh giá mức độ nghiêm trọng và phân loại**: Trong vòng **3 ngày làm việc**.
-- **Phát hành bản vá và xuất bản tư vấn**: Phối hợp công bố trong vòng **14 đến 30 ngày** tùy thuộc vào mức độ nghiêm trọng của lỗ hổng.
 
 ---
 
