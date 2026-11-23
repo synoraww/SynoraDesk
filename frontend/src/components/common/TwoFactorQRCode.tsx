@@ -40,12 +40,7 @@ export const TwoFactorQRCode: React.FC<TwoFactorQRCodeProps> = ({
     !imgError &&
     (rawData.startsWith('data:image/png') ||
       rawData.startsWith('data:image/jpeg') ||
-      rawData.startsWith('data:image/svg+xml') ||
-      rawData.startsWith('http://') ||
-      rawData.startsWith('https://'));
-
-  // Check if rawData is raw SVG markup
-  const isRawSvg = rawData.startsWith('<svg') && rawData.endsWith('</svg>');
+      rawData.startsWith('data:image/jpeg'));
 
   return (
     <div
@@ -77,11 +72,6 @@ export const TwoFactorQRCode: React.FC<TwoFactorQRCodeProps> = ({
             alt="2FA QR Code"
             onError={() => setImgError(true)}
             style={{ width: `${size}px`, height: `${size}px`, objectFit: 'contain' }}
-          />
-        ) : isRawSvg ? (
-          <div
-            dangerouslySetInnerHTML={{ __html: rawData }}
-            style={{ width: `${size}px`, height: `${size}px`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           />
         ) : secret || isOtpauth ? (
           <QRCodeSVG

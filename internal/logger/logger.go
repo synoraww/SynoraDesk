@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -17,7 +18,32 @@ var Logger zerolog.Logger
 type RedactHook struct{}
 
 func (h RedactHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
-	// Hook is applied at the logger level - we handle redaction in MarshalZerologObject
+	// Redaction is performed by redactingWriter after event serialization.
+}
+
+type redactingWriter struct{ target io.Writer }
+
+func (w redactingWriter) Write(p []byte) (int, error) {
+	var fields map[string]interface{}
+	if err := json.Unmarshal(p, &fields); err == nil {
+		for key := range fields {
+			if IsSensitiveField(key) {
+				fields[key] = "[REDACTED]"
+			}
+		}
+		if clean, err := json.Marshal(fields); err == nil {
+			clean = append(clean, '\n')
+			if _, err := w.target.Write(clean); err != nil {
+				return 0, err
+			}
+			return len(p), nil
+		}
+	}
+	// Fail closed: never write unparseable data which might contain secrets.
+	if _, err := w.target.Write([]byte("{\"error\":\"log event omitted\"}\n")); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 type redactedValue struct{}
@@ -59,7 +85,7 @@ func Init(appDataDir string, debug bool) error {
 	}
 
 	// Multi-writer: console + file
-	multi := io.MultiWriter(consoleWriter, f)
+	multi := redactingWriter{target: io.MultiWriter(consoleWriter, f)}
 
 	level := zerolog.InfoLevel
 	if debug {

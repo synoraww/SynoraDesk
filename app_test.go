@@ -1,24 +1,16 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"path/filepath"
+	"pterodesk/internal/dbclient"
 	"strings"
 	"testing"
 )
 
-func hashPasscode(passcode, salt string) string {
-	data := passcode + "::" + salt + "::pterodesk_salt_v1"
-	h := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(h[:])
-}
-
 func TestSessionLockGuard_LockUnlock(t *testing.T) {
 	app := NewApp()
-	salt := "test_salt_12345"
+	app.appDataDir = t.TempDir()
 	pin := "1234"
-	correctHash := hashPasscode(pin, salt)
-	wrongHash := hashPasscode("9999", salt)
 
 	// Initially unlocked and not enabled
 	if app.IsSessionLocked() {
@@ -26,7 +18,9 @@ func TestSessionLockGuard_LockUnlock(t *testing.T) {
 	}
 
 	// Configure lock
-	app.SetLockConfig(true, "pin4", correctHash, salt)
+	if err := app.SetLockConfig(true, "pin4", pin, ""); err != nil {
+		t.Fatal(err)
+	}
 
 	// Lock the session
 	app.LockSession()
@@ -82,7 +76,7 @@ func TestSessionLockGuard_LockUnlock(t *testing.T) {
 	}
 
 	// Try unlocking with wrong passcode
-	unlocked, err := app.UnlockSession(wrongHash)
+	unlocked, err := app.UnlockSession("9999")
 	if unlocked || err == nil {
 		t.Fatalf("expected unlock with wrong hash to fail, got unlocked=%v, err=%v", unlocked, err)
 	}
@@ -91,7 +85,7 @@ func TestSessionLockGuard_LockUnlock(t *testing.T) {
 	}
 
 	// Unlock with correct passcode
-	unlocked, err = app.UnlockSession(correctHash)
+	unlocked, err = app.UnlockSession(pin)
 	if !unlocked || err != nil {
 		t.Fatalf("expected unlock with correct hash to succeed, got unlocked=%v, err=%v", unlocked, err)
 	}
@@ -100,8 +94,34 @@ func TestSessionLockGuard_LockUnlock(t *testing.T) {
 	}
 
 	// Disable lock config
-	app.SetLockConfig(false, "none", "", "")
+	if err := app.SetLockConfig(false, "none", "", pin); err != nil {
+		t.Fatal(err)
+	}
 	if app.IsSessionLocked() {
 		t.Fatalf("expected session not to be locked when disabled")
+	}
+}
+
+func TestLockedIPCAndConfig(t *testing.T) {
+	a := NewApp()
+	a.appDataDir = t.TempDir()
+	if err := a.SetLockConfig(true, "pin4", "1234", ""); err != nil {
+		t.Fatal(err)
+	}
+	a.LockSession()
+	checks := []error{a.WriteFile("", "", ""), a.SendServerCommand(""), a.ConnectDatabase(dbclient.DBConfig{}), a.WipeAllData(), a.OpenDetachedWindow(DetachedWindowConfig{})}
+	for _, err := range checks {
+		if err == nil || !strings.Contains(err.Error(), "app is locked") {
+			t.Fatalf("expected lock error, got %v", err)
+		}
+	}
+	if err := a.SetLockConfig(false, "none", "", "wrong"); err == nil {
+		t.Fatal("disabled lock without correct PIN")
+	}
+	if !a.IsSessionLocked() {
+		t.Fatal("configuration change unlocked session")
+	}
+	if isAllowedDownloadDir(filepath.Join(a.appDataDir, "Startup")) {
+		t.Fatal("unsafe download directory allowed")
 	}
 }

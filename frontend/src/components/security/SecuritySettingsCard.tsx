@@ -100,7 +100,11 @@ export const SecuritySettingsCard: React.FC = () => {
       return;
     }
 
-    await setupLock(selectedType, inputPasscode);
+    const ok = await setupLock(selectedType, inputPasscode, currentPasscode);
+    if (!ok) {
+      setErrorMsg('Không thể thay đổi khóa. Kiểm tra mật mã hiện tại hoặc trạng thái khóa.');
+      return;
+    }
     setIsModalOpen(false);
     setSuccessMsg(t('security.lockEnabledSuccess') || 'Đã cài đặt mã khóa thành công');
     setTimeout(() => setSuccessMsg(''), 3000);
@@ -514,7 +518,7 @@ export const SecuritySettingsCard: React.FC = () => {
             <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
               {modalMode === 'disable'
                 ? 'Nhập mật mã hiện tại để tắt chế độ bảo vệ.'
-                : 'Nhập mật mã mới và xác nhận để bắt đầu bảo vệ ứng dụng.'}
+                : lockType !== 'none' ? 'Nhập mật mã mới và mật mã hiện tại để thay đổi khóa.' : 'Nhập mật mã mới và xác nhận để bắt đầu bảo vệ ứng dụng.'}
             </p>
 
             {errorMsg && (
@@ -563,6 +567,12 @@ export const SecuritySettingsCard: React.FC = () => {
                 </div>
               ) : (
                 <>
+                  {lockType !== 'none' && (
+                    <div>
+                      <label>Mật mã hiện tại:</label>
+                      <input type="password" value={currentPasscode} onChange={(e) => setCurrentPasscode(e.target.value)} required />
+                    </div>
+                  )}
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
                       {targetLength > 0 ? `Mã PIN (${targetLength} số):` : 'Mật khẩu mới:'}

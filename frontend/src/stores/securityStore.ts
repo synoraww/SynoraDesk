@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import {
   GetSecurityLockoutStatus,
-  RecordFailedPasscodeAttempt,
-  RecordSuccessfulPasscodeAttempt,
+  GetLockType,
+  IsSessionLocked,
+  LockSession,
+  SetLockConfig,
+  UnlockSession,
   UpdateSecurityLockoutConfig,
-  WipeAllData,
 } from '../../wailsjs/go/main/App';
 
 export type LockType = 'none' | 'pin4' | 'pin6' | 'pin8' | 'password';
@@ -12,8 +14,6 @@ export type LockType = 'none' | 'pin4' | 'pin6' | 'pin8' | 'password';
 interface SecurityState {
   isLocked: boolean;
   lockType: LockType;
-  passcodeHash: string;
-  salt: string;
   autoLockMinutes: number; // 0 = off, 1, 5, 15, 30
   lockOnLaunch: boolean;
   encryptDatabase: boolean;
@@ -30,7 +30,7 @@ interface SecurityState {
   isDataWiped: boolean;
 
   // Actions
-  setupLock: (type: LockType, passcode: string) => Promise<boolean>;
+  setupLock: (type: LockType, passcode: string, currentPasscode?: string) => Promise<boolean>;
   disableLock: (currentPasscode: string) => Promise<boolean>;
   unlock: (passcode: string) => Promise<boolean>;
   lockApp: () => void;
@@ -48,36 +48,16 @@ interface SecurityState {
   resetActivityTimer: () => void;
 }
 
-// Generate SHA-256 hash using Web Crypto API
-async function sha256(text: string, salt: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text + '::' + salt + '::pterodesk_salt_v1');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function generateRandomSalt(): string {
-  const array = new Uint8Array(16);
-  crypto.getRandomValues(array);
-  return Array.from(array)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 let idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let lockoutCountdownInterval: ReturnType<typeof setInterval> | null = null;
 
 const savedLockType = (localStorage.getItem('pterodesk_lock_type') as LockType) || 'none';
-const savedPasscodeHash = localStorage.getItem('pterodesk_passcode_hash') || '';
 const savedLockOnLaunch = localStorage.getItem('pterodesk_lock_on_launch') === 'true';
-const isInitialLocked = savedLockType !== 'none' && Boolean(savedPasscodeHash) && savedLockOnLaunch;
+const isInitialLocked = true; // Fail closed until the backend confirms the lock state.
 
 export const useSecurityStore = create<SecurityState>((set, get) => ({
   isLocked: isInitialLocked,
   lockType: savedLockType,
-  passcodeHash: savedPasscodeHash,
-  salt: localStorage.getItem('pterodesk_salt') || '',
   autoLockMinutes: parseInt(localStorage.getItem('pterodesk_autolock_minutes') || '0', 10),
   lockOnLaunch: savedLockOnLaunch,
   encryptDatabase: localStorage.getItem('pterodesk_encrypt_db') === 'true',
@@ -93,22 +73,15 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   isDataWiped: false,
 
   initSecurity: async () => {
-    const { lockType, lockOnLaunch, passcodeHash, salt } = get();
-
-    // Sync current lock config to backend
+    // Never trust WebView storage for lock configuration.
+    localStorage.removeItem('pterodesk_passcode_hash');
+    localStorage.removeItem('pterodesk_salt');
     try {
-      // @ts-ignore
-      const app = window.go?.main?.App;
-      if (app?.SetLockConfig) {
-        await app.SetLockConfig(
-          lockType !== 'none',
-          lockType,
-          passcodeHash,
-          salt
-        );
-      }
+      const type = (await GetLockType()) as LockType;
+      const locked = await IsSessionLocked();
+      set({ lockType: type, isLocked: locked });
     } catch {
-      // Backend not ready yet
+      set({ isLocked: true });
     }
 
     // 1. Check tamper-proof lockout status from backend DPAPI storage
@@ -149,18 +122,6 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       }
     }, 1000);
 
-    // If lock is enabled and lockOnLaunch is true (or locked out), lock immediately on startup
-    if (lockType !== 'none' && passcodeHash && (lockOnLaunch || get().isLockedOut || get().isLocked)) {
-      set({ isLocked: true });
-      try {
-        // @ts-ignore
-        const app = window.go?.main?.App;
-        if (app?.LockSession) {
-          await app.LockSession();
-        }
-      } catch {}
-    }
-
     // Setup global idle activity listener
     const handleUserActivity = () => {
       get().resetActivityTimer();
@@ -178,8 +139,6 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         set({
           isDataWiped: true,
           lockType: 'none',
-          passcodeHash: '',
-          salt: '',
           isLocked: true,
           isLockedOut: true,
           remainingLockoutSeconds: 0,
@@ -210,161 +169,46 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   },
 
   lockApp: () => {
-    const { lockType, passcodeHash } = get();
-    if (lockType !== 'none' && passcodeHash) {
+    const { lockType } = get();
+    if (lockType !== 'none') {
       set({ isLocked: true });
-      try {
-        // @ts-ignore
-        const app = window.go?.main?.App;
-        if (app?.LockSession) {
-          app.LockSession();
-        }
-      } catch {}
+      void LockSession();
     }
   },
 
-  setupLock: async (type: LockType, passcode: string) => {
-    if (type === 'none') {
-      localStorage.removeItem('pterodesk_lock_type');
+  setupLock: async (type: LockType, passcode: string, currentPasscode = '') => {
+    try {
+      await SetLockConfig(type !== 'none', type, passcode, currentPasscode);
       localStorage.removeItem('pterodesk_passcode_hash');
       localStorage.removeItem('pterodesk_salt');
-      set({ lockType: 'none', passcodeHash: '', salt: '', isLocked: false });
-      try {
-        // @ts-ignore
-        const app = window.go?.main?.App;
-        if (app?.SetLockConfig) {
-          await app.SetLockConfig(false, 'none', '', '');
-        }
-        if (app?.UnlockSession) {
-          await app.UnlockSession('');
-        }
-      } catch {}
+      localStorage.setItem('pterodesk_lock_type', type);
+      set({ lockType: type, isLocked: false, failedAttempts: 0, isLockedOut: false, remainingLockoutSeconds: 0 });
+      get().resetActivityTimer();
       return true;
+    } catch {
+      return false;
     }
-
-    const salt = generateRandomSalt();
-    const hash = await sha256(passcode, salt);
-
-    localStorage.setItem('pterodesk_lock_type', type);
-    localStorage.setItem('pterodesk_passcode_hash', hash);
-    localStorage.setItem('pterodesk_salt', salt);
-
-    set({
-      lockType: type,
-      passcodeHash: hash,
-      salt: salt,
-      isLocked: false,
-      failedAttempts: 0,
-      isLockedOut: false,
-      remainingLockoutSeconds: 0,
-    });
-
-    try {
-      // @ts-ignore
-      const app = window.go?.main?.App;
-      if (app?.SetLockConfig) {
-        await app.SetLockConfig(true, type, hash, salt);
-      }
-      if (app?.UnlockSession) {
-        await app.UnlockSession(hash);
-      }
-      await RecordSuccessfulPasscodeAttempt();
-    } catch {}
-
-    return true;
   },
 
   unlock: async (passcode: string) => {
-    const { salt, passcodeHash, isLockedOut } = get();
-
-    if (isLockedOut) {
-      return false;
-    }
-
-    if (!salt || !passcodeHash) {
-      set({ isLocked: false });
-      try {
-        // @ts-ignore
-        const app = window.go?.main?.App;
-        if (app?.UnlockSession) {
-          await app.UnlockSession('');
-        }
-      } catch {}
-      return true;
-    }
-
-    const hash = await sha256(passcode, salt);
-    if (hash === passcodeHash) {
-      try {
-        // @ts-ignore
-        const app = window.go?.main?.App;
-        if (app?.UnlockSession) {
-          await app.UnlockSession(hash);
-        }
-        await RecordSuccessfulPasscodeAttempt();
-      } catch {}
-      set({
-        isLocked: false,
-        failedAttempts: 0,
-        isLockedOut: false,
-        remainingLockoutSeconds: 0,
-      });
-      get().resetActivityTimer();
-      return true;
-    }
-
-    // Record failure in tamper-proof backend
     try {
-      const res = await RecordFailedPasscodeAttempt();
-      if (res) {
-        if (res.data_wiped) {
-          localStorage.clear();
-          set({ isDataWiped: true, isLockedOut: true, isLocked: true });
-          return false;
-        }
-
-        set({
-          failedAttempts: res.failed_attempts,
-          isLockedOut: res.is_locked_out && res.remaining_lockout_seconds > 0,
-          remainingLockoutSeconds: res.remaining_lockout_seconds || 0,
-        });
+      if (await UnlockSession(passcode)) {
+        set({ isLocked: false, failedAttempts: 0, isLockedOut: false, remainingLockoutSeconds: 0 });
+        get().resetActivityTimer();
+        return true;
       }
     } catch {
-      set((state) => ({ failedAttempts: state.failedAttempts + 1 }));
+      // Backend records incorrect passcodes and enforces lockout.
     }
-
+    try {
+      const status = await GetSecurityLockoutStatus();
+      set({ failedAttempts: status.failed_attempts, isLockedOut: status.is_locked_out,
+        remainingLockoutSeconds: status.remaining_lockout_seconds });
+    } catch {}
     return false;
   },
 
-  disableLock: async (currentPasscode: string) => {
-    const valid = await get().unlock(currentPasscode);
-    if (valid) {
-      localStorage.removeItem('pterodesk_lock_type');
-      localStorage.removeItem('pterodesk_passcode_hash');
-      localStorage.removeItem('pterodesk_salt');
-      set({
-        lockType: 'none',
-        passcodeHash: '',
-        salt: '',
-        isLocked: false,
-        failedAttempts: 0,
-        isLockedOut: false,
-        remainingLockoutSeconds: 0,
-      });
-      try {
-        // @ts-ignore
-        const app = window.go?.main?.App;
-        if (app?.SetLockConfig) {
-          await app.SetLockConfig(false, 'none', '', '');
-        }
-        if (app?.UnlockSession) {
-          await app.UnlockSession('');
-        }
-      } catch {}
-      return true;
-    }
-    return false;
-  },
+  disableLock: async (currentPasscode: string) => get().setupLock('none', '', currentPasscode),
 
   setAutoLockMinutes: (minutes: number) => {
     localStorage.setItem('pterodesk_autolock_minutes', String(minutes));

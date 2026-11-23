@@ -2,6 +2,7 @@ package sftp
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -16,11 +17,12 @@ import (
 
 // SFTPConfig holds connection parameters
 type SFTPConfig struct {
-	Host     string        `json:"host"`
-	Port     int           `json:"port"`
-	Username string        `json:"username"`
-	Password string        `json:"password"`
-	Timeout  time.Duration `json:"timeout"`
+	Host           string        `json:"host"`
+	Port           int           `json:"port"`
+	Username       string        `json:"username"`
+	Password       string        `json:"password"`
+	Timeout        time.Duration `json:"timeout"`
+	KnownHostsPath string        `json:"-"`
 }
 
 // FileEntry represents a file or directory over SFTP
@@ -42,6 +44,9 @@ type Client struct {
 
 // NewClient establishes an SFTP session
 func NewClient(config SFTPConfig) (*Client, error) {
+	if config.KnownHostsPath == "" {
+		return nil, fmt.Errorf("SFTP known hosts storage is required")
+	}
 	if config.Timeout == 0 {
 		config.Timeout = 15 * time.Second
 	}
@@ -51,8 +56,10 @@ func NewClient(config SFTPConfig) (*Client, error) {
 		Auth: []ssh.AuthMethod{
 			ssh.Password(config.Password),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         config.Timeout,
+		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return verifyHostKey(config.KnownHostsPath, hostname, key)
+		},
+		Timeout: config.Timeout,
 	}
 
 	addr := net.JoinHostPort(config.Host, fmt.Sprintf("%d", config.Port))
@@ -72,6 +79,53 @@ func NewClient(config SFTPConfig) (*Client, error) {
 		sftpClient: sftpCli,
 		config:     config,
 	}, nil
+}
+
+var knownHostsMu sync.Mutex
+
+func verifyHostKey(path, host string, key ssh.PublicKey) error {
+	knownHostsMu.Lock()
+	defer knownHostsMu.Unlock()
+	known := make(map[string]string)
+	if raw, err := os.ReadFile(path); err == nil {
+		if err := json.Unmarshal(raw, &known); err != nil {
+			return fmt.Errorf("invalid known hosts file: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	fingerprint := ssh.FingerprintSHA256(key)
+	if pinned, ok := known[host]; ok {
+		if pinned != fingerprint {
+			return fmt.Errorf("SECURITY WARNING: host key mismatch for %s", host)
+		}
+		return nil
+	}
+	known[host] = fingerprint
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	data, err := json.Marshal(known)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".known-hosts-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // Close terminates the SFTP and SSH connections

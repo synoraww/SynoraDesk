@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
+	"strconv"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 // DBConfig holds MySQL connection config
@@ -20,11 +22,11 @@ type DBConfig struct {
 
 // QueryResult represents the outcome of a SQL query
 type QueryResult struct {
-	Columns      []string                   `json:"columns"`
-	Rows         [][]interface{}            `json:"rows"`
-	RowsAffected int64                      `json:"rowsAffected"`
-	ExecutionTimeMs int64                   `json:"executionTimeMs"`
-	Error        string                     `json:"error,omitempty"`
+	Columns         []string        `json:"columns"`
+	Rows            [][]interface{} `json:"rows"`
+	RowsAffected    int64           `json:"rowsAffected"`
+	ExecutionTimeMs int64           `json:"executionTimeMs"`
+	Error           string          `json:"error,omitempty"`
 }
 
 // Client wraps a MySQL client
@@ -34,13 +36,18 @@ type Client struct {
 
 // NewClient connects to a remote MySQL/MariaDB server
 func NewClient(config DBConfig) (*Client, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=10s&readTimeout=30s&writeTimeout=30s&parseTime=true",
-		config.Username,
-		config.Password,
-		config.Host,
-		config.Port,
-		config.Database,
-	)
+	cfg := mysql.NewConfig()
+	cfg.User = config.Username
+	cfg.Passwd = config.Password
+	cfg.Net = "tcp"
+	cfg.Addr = net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	cfg.DBName = config.Database
+	cfg.TLSConfig = "true" // Fail closed if the remote database does not support TLS.
+	cfg.Timeout = 10 * time.Second
+	cfg.ReadTimeout = 30 * time.Second
+	cfg.WriteTimeout = 30 * time.Second
+	cfg.ParseTime = true
+	dsn := cfg.FormatDSN()
 
 	conn, err := sql.Open("mysql", dsn)
 	if err != nil {

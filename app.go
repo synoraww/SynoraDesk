@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.org/x/crypto/argon2"
 
 	"pterodesk/internal/api"
 	"pterodesk/internal/database"
@@ -63,6 +66,8 @@ type App struct {
 	lockConfigType    string
 	lockConfigHash    string
 	lockConfigSalt    string
+	detachedMu        sync.Mutex
+	detachedCount     int
 }
 
 // NewApp creates a new App instance
@@ -86,6 +91,11 @@ func (a *App) startup(ctx context.Context) {
 	// Clean old logs
 	go logger.CleanOldLogs(a.appDataDir, 30)
 
+	// Initialize lockout before creating the database so a fresh install is distinguishable
+	// from an existing installation whose lockout file was deleted.
+	a.credentials = security.NewCredentialStore()
+	a.sftpSessions = sftp.NewSessionManager()
+	a.lockoutManager = security.NewLockoutManager(filepath.Join(a.appDataDir, "data"), a.credentials, func() { _ = a.wipeAllData() })
 	// Initialize database
 	db, err := database.New(a.appDataDir)
 	if err != nil {
@@ -93,11 +103,32 @@ func (a *App) startup(ctx context.Context) {
 		return
 	}
 	a.db = db
+	// Load the verifier before exposing any IPC methods to the WebView.
+	if raw, err := os.ReadFile(filepath.Join(a.appDataDir, "data", "app_lock.dat")); err == nil {
+		if plain, err := security.Decrypt(raw); err == nil {
+			var stored struct{ Type, Salt, Hash string }
+			if json.Unmarshal(plain, &stored) == nil && stored.Hash != "" && stored.Salt != "" {
+				a.lockConfigType, a.lockConfigSalt, a.lockConfigHash = stored.Type, stored.Salt, stored.Hash
+				a.lockConfigEnabled, a.sessionLocked = true, true
+			} else {
+				logger.Logger.Error().Msg("Invalid app lock configuration; refusing to unlock")
+				a.lockConfigEnabled, a.sessionLocked = true, true
+			}
+		} else {
+			logger.Logger.Error().Err(err).Msg("Cannot decrypt app lock; refusing to unlock")
+			a.lockConfigEnabled, a.sessionLocked = true, true
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		a.lockConfigEnabled, a.sessionLocked = true, true
+	} else if os.IsNotExist(err) {
+		// If a previously configured installation loses its verifier, fail closed.
+		if _, dbErr := os.Stat(filepath.Join(a.appDataDir, "data", "pterodesk.db")); dbErr == nil {
+			if _, legacyErr := os.Stat(filepath.Join(a.appDataDir, "data", "app_lock_enabled")); legacyErr == nil {
+				a.lockConfigEnabled, a.sessionLocked = true, true
+			}
+		}
+	}
 	logger.Logger.Info().Msg("Database initialized")
-
-	// Initialize credential store
-	a.credentials = security.NewCredentialStore()
-	a.sftpSessions = sftp.NewSessionManager()
 
 	// Initialize panel manager
 	a.panelManager = panel.NewManager(a.db, a.credentials)
@@ -105,15 +136,6 @@ func (a *App) startup(ctx context.Context) {
 		logger.Logger.Error().Err(err).Msg("Failed to initialize panel manager")
 	}
 	logger.Logger.Info().Msg("Panel manager initialized")
-
-	// Initialize security lockout manager (tamper-proof persistent countdown)
-	a.lockoutManager = security.NewLockoutManager(
-		filepath.Join(a.appDataDir, "data"),
-		a.credentials,
-		func() {
-			_ = a.WipeAllData()
-		},
-	)
 
 	// Restore window state for main window
 	if !a.detachedConfig.IsDetached {
@@ -195,14 +217,14 @@ func (a *App) GetSecurityLockoutStatus() (security.LockoutStatus, error) {
 
 // RecordFailedPasscodeAttempt registers a failed passcode/PIN attempt
 func (a *App) RecordFailedPasscodeAttempt() (security.LockoutStatus, error) {
-	if a.lockoutManager == nil {
-		return security.LockoutStatus{}, fmt.Errorf("lockout manager not initialized")
-	}
-	return a.lockoutManager.RecordFailedAttempt()
+	return security.LockoutStatus{}, fmt.Errorf("passcode attempts are recorded by UnlockSession")
 }
 
 // RecordSuccessfulPasscodeAttempt resets the failed attempt counter
 func (a *App) RecordSuccessfulPasscodeAttempt() error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if a.lockoutManager == nil {
 		return nil
 	}
@@ -211,6 +233,9 @@ func (a *App) RecordSuccessfulPasscodeAttempt() error {
 
 // UpdateSecurityLockoutConfig updates lockout and auto-wipe preferences
 func (a *App) UpdateSecurityLockoutConfig(cfg security.LockoutConfig) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if a.lockoutManager == nil {
 		return fmt.Errorf("lockout manager not initialized")
 	}
@@ -220,6 +245,13 @@ func (a *App) UpdateSecurityLockoutConfig(cfg security.LockoutConfig) error {
 // RestartApp finds os.Executable(), spawns a new process (with proper Windows flags so it starts independently),
 // and exits the current process with os.Exit(0) or wails runtime.Quit(a.ctx).
 func (a *App) RestartApp() error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	return a.restartApp()
+}
+
+func (a *App) restartApp() error {
 	exe, err := os.Executable()
 	if err != nil {
 		logger.Logger.Error().Err(err).Msg("RestartApp: failed to find executable")
@@ -249,8 +281,15 @@ func (a *App) RestartApp() error {
 
 // WipeAllData safely purges all sensitive credentials, database, and settings
 func (a *App) WipeAllData() error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	return a.wipeAllData()
+}
+
+func (a *App) wipeAllData() error {
 	logger.Logger.Warn().Msg("SECURITY ALERT: Initiating complete data wipe due to maximum failed passcode attempts")
-	a.DisconnectServerConsole()
+	a.disconnectServerConsole()
 	if a.sftpSessions != nil {
 		a.sftpSessions.CloseAll()
 	}
@@ -270,6 +309,9 @@ func (a *App) WipeAllData() error {
 	_ = os.Remove(filepath.Join(dbDir, "pterodesk.db-wal"))
 	_ = os.Remove(filepath.Join(dbDir, "pterodesk.db-shm"))
 	_ = os.Remove(filepath.Join(dbDir, "window_state.json"))
+	_ = os.Remove(filepath.Join(dbDir, "app_lock.dat"))
+	_ = os.Remove(filepath.Join(dbDir, "app_lock_enabled"))
+	_ = os.Remove(filepath.Join(dbDir, "sftp_known_hosts"))
 
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "security:data-wiped")
@@ -279,7 +321,7 @@ func (a *App) WipeAllData() error {
 	// cleanly with a fresh database and no 'database is closed' error.
 	go func() {
 		time.Sleep(400 * time.Millisecond)
-		_ = a.RestartApp()
+		_ = a.restartApp()
 	}()
 
 	return nil
@@ -288,17 +330,89 @@ func (a *App) WipeAllData() error {
 // --- In-Memory Session Lock Guard Bindings ---
 
 // SetLockConfig updates the session lock configuration
-func (a *App) SetLockConfig(enabled bool, lockType string, hash string, salt string) {
+func (a *App) SetLockConfig(enabled bool, lockType string, passcode string, currentPasscode string) error {
 	a.sessionMu.Lock()
 	defer a.sessionMu.Unlock()
-
-	a.lockConfigEnabled = enabled && hash != "" && lockType != "none" && lockType != ""
-	a.lockConfigType = lockType
-	a.lockConfigHash = hash
-	a.lockConfigSalt = salt
-	if !a.lockConfigEnabled {
-		a.sessionLocked = false
+	if a.lockConfigEnabled {
+		if a.lockoutManager != nil {
+			status := a.lockoutManager.GetStatus()
+			if status.IsLockedOut {
+				return fmt.Errorf("app is locked out")
+			}
+		}
+		if !a.verifyPasscode(currentPasscode) {
+			if a.lockoutManager != nil {
+				_, _ = a.lockoutManager.RecordFailedAttempt()
+			}
+			return fmt.Errorf("authentication required: invalid current passcode")
+		}
 	}
+	path := filepath.Join(a.appDataDir, "data", "app_lock.dat")
+	marker := filepath.Join(a.appDataDir, "data", "app_lock_enabled")
+	if !enabled {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		a.lockConfigEnabled, a.sessionLocked = false, false
+		a.lockConfigHash, a.lockConfigSalt, a.lockConfigType = "", "", "none"
+		return nil
+	}
+	if lockType != "pin4" && lockType != "pin6" && lockType != "pin8" && lockType != "password" {
+		return fmt.Errorf("invalid lock type")
+	}
+	if len(passcode) < 4 {
+		return fmt.Errorf("passcode too short")
+	}
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return err
+	}
+	hash := argon2.IDKey([]byte(passcode), salt, 3, 64*1024, 4, 32)
+	stored, err := json.Marshal(struct{ Type, Salt, Hash string }{lockType, hex.EncodeToString(salt), hex.EncodeToString(hash)})
+	if err != nil {
+		return err
+	}
+	encrypted, err := security.Encrypt(stored)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, encrypted, 0600); err != nil {
+		return err
+	}
+	if err := os.WriteFile(marker, []byte("enabled"), 0600); err != nil {
+		return err
+	}
+	a.lockConfigType, a.lockConfigSalt, a.lockConfigHash = lockType, hex.EncodeToString(salt), hex.EncodeToString(hash)
+	a.lockConfigEnabled, a.sessionLocked = true, false
+	return nil
+}
+
+func (a *App) GetLockType() string {
+	a.sessionMu.RLock()
+	defer a.sessionMu.RUnlock()
+	if !a.lockConfigEnabled {
+		return "none"
+	}
+	if a.lockConfigType == "" {
+		return "password"
+	}
+	return a.lockConfigType
+}
+
+func (a *App) verifyPasscode(passcode string) bool {
+	salt, err := hex.DecodeString(a.lockConfigSalt)
+	if err != nil || len(salt) != 16 || a.lockConfigHash == "" {
+		return false
+	}
+	actual := argon2.IDKey([]byte(passcode), salt, 3, 64*1024, 4, 32)
+	expected, err := hex.DecodeString(a.lockConfigHash)
+	return err == nil && subtle.ConstantTimeCompare(actual, expected) == 1
 }
 
 // LockSession locks the session if lock is enabled
@@ -316,12 +430,12 @@ func (a *App) IsSessionLocked() bool {
 }
 
 // UnlockSession verifies the provided passcode hash against the configured hash
-func (a *App) UnlockSession(passcodeHash string) (bool, error) {
+func (a *App) UnlockSession(passcode string) (bool, error) {
 	a.sessionMu.Lock()
 	defer a.sessionMu.Unlock()
 
-	// If lock is not enabled or not currently locked, return true
-	if !a.lockConfigEnabled || !a.sessionLocked {
+	// An enabled lock must always verify the passcode, including when not locked.
+	if !a.lockConfigEnabled {
 		return true, nil
 	}
 
@@ -333,7 +447,7 @@ func (a *App) UnlockSession(passcodeHash string) (bool, error) {
 		}
 	}
 
-	if subtle.ConstantTimeCompare([]byte(passcodeHash), []byte(a.lockConfigHash)) == 1 {
+	if a.verifyPasscode(passcode) {
 		a.sessionLocked = false
 		if a.lockoutManager != nil {
 			_ = a.lockoutManager.RecordSuccess()
@@ -369,7 +483,7 @@ func (a *App) shutdown(ctx context.Context) {
 		x, y := runtime.WindowGetPosition(a.ctx)
 		_ = a.SaveWindowState(w, h, x, y, isMax)
 	}
-	a.DisconnectServerConsole()
+	a.disconnectServerConsole()
 	if a.sftpSessions != nil {
 		a.sftpSessions.CloseAll()
 	}
@@ -436,6 +550,9 @@ func (a *App) GetPanelAccount(panelID string) (*api.Account, error) {
 
 // UpdateAccountEmail updates the email for the active account
 func (a *App) UpdateAccountEmail(email, password string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -445,6 +562,9 @@ func (a *App) UpdateAccountEmail(email, password string) error {
 
 // UpdateAccountPassword updates the password for the active account
 func (a *App) UpdateAccountPassword(currentPassword, newPassword, confirmPassword string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -454,6 +574,9 @@ func (a *App) UpdateAccountPassword(currentPassword, newPassword, confirmPasswor
 
 // GetTwoFactorDetails retrieves 2FA setup details (secret & QR data)
 func (a *App) GetTwoFactorDetails() (*api.TwoFactorDetails, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -463,6 +586,9 @@ func (a *App) GetTwoFactorDetails() (*api.TwoFactorDetails, error) {
 
 // EnableTwoFactor verifies TOTP code and enables 2FA, returning backup recovery tokens
 func (a *App) EnableTwoFactor(code string) ([]string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -472,6 +598,9 @@ func (a *App) EnableTwoFactor(code string) ([]string, error) {
 
 // DisableTwoFactor disables 2FA for the active account
 func (a *App) DisableTwoFactor(password string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -481,6 +610,9 @@ func (a *App) DisableTwoFactor(password string) error {
 
 // ListAccountAPIKeys retrieves all API keys for the current account
 func (a *App) ListAccountAPIKeys() ([]api.AccountApiKey, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -490,6 +622,9 @@ func (a *App) ListAccountAPIKeys() ([]api.AccountApiKey, error) {
 
 // CreateAccountAPIKey creates a new API key
 func (a *App) CreateAccountAPIKey(description string, allowedIPs []string) (*api.AccountApiKey, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -499,6 +634,9 @@ func (a *App) CreateAccountAPIKey(description string, allowedIPs []string) (*api
 
 // DeleteAccountAPIKey deletes an API key
 func (a *App) DeleteAccountAPIKey(identifier string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -508,6 +646,9 @@ func (a *App) DeleteAccountAPIKey(identifier string) error {
 
 // ListAccountSSHKeys retrieves all SSH keys for the current account
 func (a *App) ListAccountSSHKeys() ([]api.AccountSSHKey, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -517,6 +658,9 @@ func (a *App) ListAccountSSHKeys() ([]api.AccountSSHKey, error) {
 
 // CreateAccountSSHKey creates a new SSH key
 func (a *App) CreateAccountSSHKey(name, publicKey string) (*api.AccountSSHKey, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -526,6 +670,9 @@ func (a *App) CreateAccountSSHKey(name, publicKey string) (*api.AccountSSHKey, e
 
 // RemoveAccountSSHKey removes an SSH key by fingerprint
 func (a *App) RemoveAccountSSHKey(fingerprint string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -535,6 +682,9 @@ func (a *App) RemoveAccountSSHKey(fingerprint string) error {
 
 // GetAccountActivity retrieves activity log for the current account
 func (a *App) GetAccountActivity() ([]api.AccountActivity, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -544,6 +694,9 @@ func (a *App) GetAccountActivity() ([]api.AccountActivity, error) {
 
 // AddPanel adds a new panel configuration
 func (a *App) AddPanel(input panel.PanelInput) (*panel.Panel, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	p, err := a.panelManager.AddPanel(input)
 	if err != nil {
 		logger.Logger.Error().Err(err).Str("name", input.Name).Msg("Failed to add panel")
@@ -556,6 +709,9 @@ func (a *App) AddPanel(input panel.PanelInput) (*panel.Panel, error) {
 
 // UpdatePanel updates an existing panel
 func (a *App) UpdatePanel(id string, input panel.PanelInput) (*panel.Panel, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	p, err := a.panelManager.UpdatePanel(id, input)
 	if err != nil {
 		logger.Logger.Error().Err(err).Str("id", id).Msg("Failed to update panel")
@@ -568,6 +724,9 @@ func (a *App) UpdatePanel(id string, input panel.PanelInput) (*panel.Panel, erro
 
 // DeletePanel removes a panel
 func (a *App) DeletePanel(id string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if err := a.panelManager.DeletePanel(id); err != nil {
 		logger.Logger.Error().Err(err).Str("id", id).Msg("Failed to delete panel")
 		return err
@@ -579,6 +738,9 @@ func (a *App) DeletePanel(id string) error {
 
 // SwitchPanel switches the active panel
 func (a *App) SwitchPanel(id string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if err := a.panelManager.SetActivePanel(id); err != nil {
 		return err
 	}
@@ -590,6 +752,9 @@ func (a *App) SwitchPanel(id string) error {
 
 // TestPanelConnection tests API connectivity
 func (a *App) TestPanelConnection(id string) (*panel.ConnectionTestResult, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	result, err := a.panelManager.TestConnection(id)
 	if err != nil {
 		return nil, err
@@ -656,6 +821,9 @@ func (a *App) GetServer(identifier string) (*api.Server, error) {
 
 // GetServerResources gets current resource usage
 func (a *App) GetServerResources(identifier string) (*api.ResourceUsage, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -735,11 +903,17 @@ func (a *App) GetDashboardStats() (*panel.DashboardStats, error) {
 
 // GetRecentActivities returns recent activity logs
 func (a *App) GetRecentActivities() ([]database.ActivityRecord, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	return a.db.GetActivities(50)
 }
 
 // GetRecentServers returns recently accessed servers
 func (a *App) GetRecentServers() ([]database.RecentServerRecord, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	return a.db.GetRecentServers(10)
 }
 
@@ -747,6 +921,9 @@ func (a *App) GetRecentServers() ([]database.RecentServerRecord, error) {
 
 // ListFiles lists files in a directory on a server
 func (a *App) ListFiles(identifier, directory string) ([]api.FileObject, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -756,6 +933,9 @@ func (a *App) ListFiles(identifier, directory string) ([]api.FileObject, error) 
 
 // GetFileContents gets file contents
 func (a *App) GetFileContents(identifier, filePath string) (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return "", err
@@ -765,6 +945,9 @@ func (a *App) GetFileContents(identifier, filePath string) (string, error) {
 
 // WriteFile writes content to a file
 func (a *App) WriteFile(identifier, filePath, content string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -774,6 +957,9 @@ func (a *App) WriteFile(identifier, filePath, content string) error {
 
 // CreateFile creates a new folder/file
 func (a *App) CreateFile(identifier, root, name string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -783,6 +969,9 @@ func (a *App) CreateFile(identifier, root, name string) error {
 
 // DeleteFiles deletes files/folders
 func (a *App) DeleteFiles(identifier, root string, files []string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -792,6 +981,9 @@ func (a *App) DeleteFiles(identifier, root string, files []string) error {
 
 // RenameFile renames or moves a file
 func (a *App) RenameFile(identifier, root, from, to string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -803,6 +995,9 @@ func (a *App) RenameFile(identifier, root, from, to string) error {
 
 // GetFileDownloadURL retrieves a presigned URL to download a file
 func (a *App) GetFileDownloadURL(identifier, filePath string) (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return "", err
@@ -812,6 +1007,9 @@ func (a *App) GetFileDownloadURL(identifier, filePath string) (string, error) {
 
 // ChmodFile modifies file permissions via REST API
 func (a *App) ChmodFile(identifier, root, file, mode string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -823,6 +1021,9 @@ func (a *App) ChmodFile(identifier, root, file, mode string) error {
 
 // CompressFiles archives files/directories to a tar.gz archive
 func (a *App) CompressFiles(identifier, root string, files []string) (*api.FileObject, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -832,6 +1033,9 @@ func (a *App) CompressFiles(identifier, root string, files []string) (*api.FileO
 
 // DecompressFile extracts an archive
 func (a *App) DecompressFile(identifier, root, file string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -841,6 +1045,9 @@ func (a *App) DecompressFile(identifier, root, file string) error {
 
 // CopyFile duplicates a file
 func (a *App) CopyFile(identifier, location string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -850,6 +1057,9 @@ func (a *App) CopyFile(identifier, location string) error {
 
 // PullRemoteFile pulls a remote file from an HTTP/HTTPS URL directly onto the server
 func (a *App) PullRemoteFile(identifier, directory, url, filename string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -859,6 +1069,9 @@ func (a *App) PullRemoteFile(identifier, directory, url, filename string) error 
 
 // UploadServerFileDirect uploads file content directly using Wings presigned upload URL
 func (a *App) UploadServerFileDirect(identifier, directory, filename, base64Content string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -872,6 +1085,9 @@ func (a *App) UploadServerFileDirect(identifier, directory, filename, base64Cont
 
 // ChmodServerSFTPFile chmods a file over SFTP
 func (a *App) ChmodServerSFTPFile(serverID, path, modeStr string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	cli, err := a.sftpSessions.Get(serverID)
 	if err != nil {
 		return err
@@ -885,6 +1101,9 @@ func (a *App) ChmodServerSFTPFile(serverID, path, modeStr string) error {
 
 // RenameServerSFTPFile renames a file over SFTP
 func (a *App) RenameServerSFTPFile(serverID, oldPath, newPath string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	cli, err := a.sftpSessions.Get(serverID)
 	if err != nil {
 		return err
@@ -896,6 +1115,9 @@ func (a *App) RenameServerSFTPFile(serverID, oldPath, newPath string) error {
 
 // ListNodes lists all nodes
 func (a *App) ListNodes() ([]api.Node, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	appAPI, err := a.panelManager.GetAppAPI()
 	if err != nil {
 		return nil, err
@@ -905,6 +1127,9 @@ func (a *App) ListNodes() ([]api.Node, error) {
 
 // GetNode retrieves a node
 func (a *App) GetNode(id int) (*api.Node, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	appAPI, err := a.panelManager.GetAppAPI()
 	if err != nil {
 		return nil, err
@@ -914,6 +1139,9 @@ func (a *App) GetNode(id int) (*api.Node, error) {
 
 // CreateNode creates a new node
 func (a *App) CreateNode(req api.CreateNodeRequest) (*api.Node, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	appAPI, err := a.panelManager.GetAppAPI()
 	if err != nil {
 		return nil, err
@@ -928,6 +1156,9 @@ func (a *App) CreateNode(req api.CreateNodeRequest) (*api.Node, error) {
 
 // DeleteNode deletes a node
 func (a *App) DeleteNode(id int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	appAPI, err := a.panelManager.GetAppAPI()
 	if err != nil {
 		return err
@@ -943,6 +1174,9 @@ func (a *App) DeleteNode(id int) error {
 
 // ListNests lists all nests
 func (a *App) ListNests() ([]api.Nest, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	appAPI, err := a.panelManager.GetAppAPI()
 	if err != nil {
 		return nil, err
@@ -952,6 +1186,9 @@ func (a *App) ListNests() ([]api.Nest, error) {
 
 // ListEggs lists eggs for a nest
 func (a *App) ListEggs(nestID int) ([]api.Egg, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	appAPI, err := a.panelManager.GetAppAPI()
 	if err != nil {
 		return nil, err
@@ -963,6 +1200,9 @@ func (a *App) ListEggs(nestID int) ([]api.Egg, error) {
 
 // ListDatabases lists databases for a server
 func (a *App) ListDatabases(identifier string) ([]api.Database, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -974,6 +1214,9 @@ func (a *App) ListDatabases(identifier string) ([]api.Database, error) {
 
 // ListNodeAllocations lists allocations for a node
 func (a *App) ListNodeAllocations(nodeID int) ([]api.NodeAllocation, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	appAPI, err := a.panelManager.GetAppAPI()
 	if err != nil {
 		return nil, err
@@ -1008,6 +1251,9 @@ func (a *App) getBackgroundDir() string {
 
 // OpenBackgroundFolder opens the dedicated background folder in Windows Explorer
 func (a *App) OpenBackgroundFolder() error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	dir := a.getBackgroundDir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create background directory: %w", err)
@@ -1020,6 +1266,9 @@ func (a *App) OpenBackgroundFolder() error {
 // copies it into the dedicated %APPDATA%/PteroDesk/backgrounds/ directory,
 // saves configuration, and returns the data URL and file path.
 func (a *App) SelectAndSaveBackgroundImage() (*CustomBackgroundInfo, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	filePath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select Background Image",
 		Filters: []runtime.FileFilter{
@@ -1124,6 +1373,9 @@ func (a *App) SelectAndSaveBackgroundImage() (*CustomBackgroundInfo, error) {
 
 // GetCustomBackground retrieves the saved custom background info
 func (a *App) GetCustomBackground() (*CustomBackgroundInfo, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	enabledStr, _ := a.db.GetSetting("custom_bg_enabled")
 	enabled := enabledStr == "true"
 
@@ -1218,6 +1470,9 @@ func (a *App) GetCustomBackground() (*CustomBackgroundInfo, error) {
 
 // SaveCustomBackgroundSettings updates opacity, blur, scale, positions and fitMode
 func (a *App) SaveCustomBackgroundSettings(opacity float64, blur int, scale float64, positionX float64, positionY float64, fitMode string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	_ = a.db.SaveSetting("custom_bg_opacity", fmt.Sprintf("%.2f", opacity))
 	_ = a.db.SaveSetting("custom_bg_blur", strconv.Itoa(blur))
 	if scale > 0 {
@@ -1233,6 +1488,9 @@ func (a *App) SaveCustomBackgroundSettings(opacity float64, blur int, scale floa
 
 // RemoveCustomBackground disables and removes the custom background
 func (a *App) RemoveCustomBackground() error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	_ = a.db.SaveSetting("custom_bg_enabled", "false")
 	path, _ := a.db.GetSetting("custom_bg_path")
 	if path != "" {
@@ -1246,11 +1504,15 @@ func (a *App) RemoveCustomBackground() error {
 
 // ConnectServerSFTP connects a server directly to SFTP
 func (a *App) ConnectServerSFTP(serverID, host string, port int, username, password string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	_, err := a.sftpSessions.Connect(serverID, sftp.SFTPConfig{
-		Host:     host,
-		Port:     port,
-		Username: username,
-		Password: password,
+		Host:           host,
+		Port:           port,
+		Username:       username,
+		Password:       password,
+		KnownHostsPath: filepath.Join(a.appDataDir, "data", "sftp_known_hosts"),
 	})
 	if err != nil {
 		logger.Logger.Error().Err(err).Str("server", serverID).Msg("Server SFTP connection failed")
@@ -1263,6 +1525,9 @@ func (a *App) ConnectServerSFTP(serverID, host string, port int, username, passw
 
 // IsServerSFTPConnected checks if server SFTP is active
 func (a *App) IsServerSFTPConnected(serverID string) bool {
+	if a.checkSessionLock() != nil {
+		return false
+	}
 	if a.sftpSessions == nil {
 		return false
 	}
@@ -1271,6 +1536,9 @@ func (a *App) IsServerSFTPConnected(serverID string) bool {
 
 // DisconnectServerSFTP terminates SFTP for a server
 func (a *App) DisconnectServerSFTP(serverID string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if a.sftpSessions == nil {
 		return nil
 	}
@@ -1279,6 +1547,9 @@ func (a *App) DisconnectServerSFTP(serverID string) error {
 
 // ListServerSFTPFiles lists files via SFTP
 func (a *App) ListServerSFTPFiles(serverID, path string) ([]sftp.FileEntry, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	cli, err := a.sftpSessions.Get(serverID)
 	if err != nil {
 		return nil, err
@@ -1288,6 +1559,9 @@ func (a *App) ListServerSFTPFiles(serverID, path string) ([]sftp.FileEntry, erro
 
 // ReadServerSFTPFile reads file content via SFTP
 func (a *App) ReadServerSFTPFile(serverID, path string) (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
 	cli, err := a.sftpSessions.Get(serverID)
 	if err != nil {
 		return "", err
@@ -1297,6 +1571,9 @@ func (a *App) ReadServerSFTPFile(serverID, path string) (string, error) {
 
 // WriteServerSFTPFile writes file content via SFTP
 func (a *App) WriteServerSFTPFile(serverID, path, content string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	cli, err := a.sftpSessions.Get(serverID)
 	if err != nil {
 		return err
@@ -1306,6 +1583,9 @@ func (a *App) WriteServerSFTPFile(serverID, path, content string) error {
 
 // DeleteServerSFTPFile deletes file or folder via SFTP
 func (a *App) DeleteServerSFTPFile(serverID, path string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	cli, err := a.sftpSessions.Get(serverID)
 	if err != nil {
 		return err
@@ -1315,6 +1595,9 @@ func (a *App) DeleteServerSFTPFile(serverID, path string) error {
 
 // CreateServerSFTPFolder creates folder via SFTP
 func (a *App) CreateServerSFTPFolder(serverID, path string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	cli, err := a.sftpSessions.Get(serverID)
 	if err != nil {
 		return err
@@ -1324,6 +1607,9 @@ func (a *App) CreateServerSFTPFolder(serverID, path string) error {
 
 // UploadServerSFTPFile uploads base64 data to remote path via SFTP
 func (a *App) UploadServerSFTPFile(serverID, path, base64Content string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	cli, err := a.sftpSessions.Get(serverID)
 	if err != nil {
 		return err
@@ -1339,6 +1625,10 @@ func (a *App) UploadServerSFTPFile(serverID, path, base64Content string) error {
 
 // ConnectSFTP establishes an SFTP session
 func (a *App) ConnectSFTP(cfg sftp.SFTPConfig) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	cfg.KnownHostsPath = filepath.Join(a.appDataDir, "data", "sftp_known_hosts")
 	if a.activeSFTP != nil {
 		a.activeSFTP.Close()
 	}
@@ -1354,6 +1644,9 @@ func (a *App) ConnectSFTP(cfg sftp.SFTPConfig) error {
 
 // ListSFTPFiles lists files in a directory via SFTP
 func (a *App) ListSFTPFiles(remotePath string) ([]sftp.FileEntry, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	if a.activeSFTP == nil {
 		return nil, fmt.Errorf("no active SFTP session")
 	}
@@ -1362,6 +1655,9 @@ func (a *App) ListSFTPFiles(remotePath string) ([]sftp.FileEntry, error) {
 
 // ReadSFTPFile reads remote text file content
 func (a *App) ReadSFTPFile(remotePath string) (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
 	if a.activeSFTP == nil {
 		return "", fmt.Errorf("no active SFTP session")
 	}
@@ -1370,6 +1666,9 @@ func (a *App) ReadSFTPFile(remotePath string) (string, error) {
 
 // WriteSFTPFile writes text file content to remote path
 func (a *App) WriteSFTPFile(remotePath, content string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if a.activeSFTP == nil {
 		return fmt.Errorf("no active SFTP session")
 	}
@@ -1378,6 +1677,9 @@ func (a *App) WriteSFTPFile(remotePath, content string) error {
 
 // CloseSFTP closes the active SFTP session
 func (a *App) CloseSFTP() error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if a.activeSFTP != nil {
 		err := a.activeSFTP.Close()
 		a.activeSFTP = nil
@@ -1390,6 +1692,9 @@ func (a *App) CloseSFTP() error {
 
 // ConnectDatabase opens a MySQL connection
 func (a *App) ConnectDatabase(cfg dbclient.DBConfig) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if a.activeDB != nil {
 		a.activeDB.Close()
 	}
@@ -1405,6 +1710,9 @@ func (a *App) ConnectDatabase(cfg dbclient.DBConfig) error {
 
 // ExecuteSQL executes a SQL query and returns results
 func (a *App) ExecuteSQL(query string) (*dbclient.QueryResult, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	if a.activeDB == nil {
 		return nil, fmt.Errorf("no active database connection")
 	}
@@ -1413,6 +1721,9 @@ func (a *App) ExecuteSQL(query string) (*dbclient.QueryResult, error) {
 
 // ListSQLTables lists all tables in the active database
 func (a *App) ListSQLTables() ([]string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	if a.activeDB == nil {
 		return nil, fmt.Errorf("no active database connection")
 	}
@@ -1421,6 +1732,9 @@ func (a *App) ListSQLTables() ([]string, error) {
 
 // CloseDatabase closes the database connection
 func (a *App) CloseDatabase() error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if a.activeDB != nil {
 		err := a.activeDB.Close()
 		a.activeDB = nil
@@ -1556,6 +1870,9 @@ func (a *App) ConnectServerConsole(serverID string) error {
 
 // SendServerCommand sends a command through the live WebSocket console
 func (a *App) SendServerCommand(command string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	a.wsMu.Lock()
 	defer a.wsMu.Unlock()
 
@@ -1567,6 +1884,9 @@ func (a *App) SendServerCommand(command string) error {
 
 // SendServerPowerWS sends a power action through WebSocket
 func (a *App) SendServerPowerWS(signal string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	a.wsMu.Lock()
 	defer a.wsMu.Unlock()
 
@@ -1578,6 +1898,10 @@ func (a *App) SendServerPowerWS(signal string) error {
 
 // DisconnectServerConsole closes the active WebSocket console
 func (a *App) DisconnectServerConsole() {
+	a.disconnectServerConsole()
+}
+
+func (a *App) disconnectServerConsole() {
 	a.wsMu.Lock()
 	defer a.wsMu.Unlock()
 
@@ -1592,6 +1916,9 @@ func (a *App) DisconnectServerConsole() {
 
 // ListBackups lists backups for a server
 func (a *App) ListBackups(serverID string) ([]api.Backup, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1601,6 +1928,9 @@ func (a *App) ListBackups(serverID string) ([]api.Backup, error) {
 
 // CreateBackup creates a new backup
 func (a *App) CreateBackup(serverID, name string, isLocked bool, ignored string) (*api.Backup, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1616,6 +1946,9 @@ func (a *App) CreateBackup(serverID, name string, isLocked bool, ignored string)
 
 // GetBackupDownloadURL retrieves the download URL for a backup
 func (a *App) GetBackupDownloadURL(serverID, backupUUID string) (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return "", err
@@ -1625,6 +1958,9 @@ func (a *App) GetBackupDownloadURL(serverID, backupUUID string) (string, error) 
 
 // ToggleBackupLock toggles the locked state of a backup
 func (a *App) ToggleBackupLock(serverID, backupUUID string) (*api.Backup, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1634,6 +1970,9 @@ func (a *App) ToggleBackupLock(serverID, backupUUID string) (*api.Backup, error)
 
 // RestoreBackup restores a backup
 func (a *App) RestoreBackup(serverID, backupUUID string, truncate bool) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1649,6 +1988,9 @@ func (a *App) RestoreBackup(serverID, backupUUID string, truncate bool) error {
 
 // DeleteBackup deletes a backup
 func (a *App) DeleteBackup(serverID, backupUUID string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1666,6 +2008,9 @@ func (a *App) DeleteBackup(serverID, backupUUID string) error {
 
 // ListSubusers lists subusers of a server
 func (a *App) ListSubusers(serverID string) ([]api.Subuser, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1675,6 +2020,9 @@ func (a *App) ListSubusers(serverID string) ([]api.Subuser, error) {
 
 // CreateSubuser invites or adds a subuser
 func (a *App) CreateSubuser(serverID, email string, permissions []string) (*api.Subuser, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1690,6 +2038,9 @@ func (a *App) CreateSubuser(serverID, email string, permissions []string) (*api.
 
 // UpdateSubuser updates permissions for a subuser
 func (a *App) UpdateSubuser(serverID, subuserUUID string, permissions []string) (*api.Subuser, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1699,6 +2050,9 @@ func (a *App) UpdateSubuser(serverID, subuserUUID string, permissions []string) 
 
 // DeleteSubuser removes a subuser
 func (a *App) DeleteSubuser(serverID, subuserUUID string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1716,6 +2070,9 @@ func (a *App) DeleteSubuser(serverID, subuserUUID string) error {
 
 // ListSchedules returns schedules for a server
 func (a *App) ListSchedules(serverID string) ([]api.Schedule, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1725,6 +2082,9 @@ func (a *App) ListSchedules(serverID string) ([]api.Schedule, error) {
 
 // CreateSchedule adds a schedule to a server
 func (a *App) CreateSchedule(serverID, name string, cron api.CronExpression, isActive, onlyWhenOnline bool) (*api.Schedule, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1734,6 +2094,9 @@ func (a *App) CreateSchedule(serverID, name string, cron api.CronExpression, isA
 
 // TriggerSchedule runs a schedule immediately
 func (a *App) TriggerSchedule(serverID string, scheduleID int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1743,6 +2106,9 @@ func (a *App) TriggerSchedule(serverID string, scheduleID int) error {
 
 // DeleteSchedule deletes a schedule
 func (a *App) DeleteSchedule(serverID string, scheduleID int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1754,6 +2120,9 @@ func (a *App) DeleteSchedule(serverID string, scheduleID int) error {
 
 // ListServerAllocations lists all network allocations for a server
 func (a *App) ListServerAllocations(serverID string) ([]api.Allocation, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1763,6 +2132,9 @@ func (a *App) ListServerAllocations(serverID string) ([]api.Allocation, error) {
 
 // AssignServerAllocation assigns a new allocation to the server
 func (a *App) AssignServerAllocation(serverID string) (*api.Allocation, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1778,6 +2150,9 @@ func (a *App) AssignServerAllocation(serverID string) (*api.Allocation, error) {
 
 // SetServerAllocationNote updates the note for an allocation
 func (a *App) SetServerAllocationNote(serverID string, allocationID int, notes string) (*api.Allocation, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1793,6 +2168,9 @@ func (a *App) SetServerAllocationNote(serverID string, allocationID int, notes s
 
 // SetServerPrimaryAllocation sets an allocation as primary
 func (a *App) SetServerPrimaryAllocation(serverID string, allocationID int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1808,6 +2186,9 @@ func (a *App) SetServerPrimaryAllocation(serverID string, allocationID int) erro
 
 // UnassignServerAllocation deletes an allocation from the server
 func (a *App) UnassignServerAllocation(serverID string, allocationID int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1825,6 +2206,9 @@ func (a *App) UnassignServerAllocation(serverID string, allocationID int) error 
 
 // GetServerStartup gets full startup configuration including commands, docker images, and variables
 func (a *App) GetServerStartup(identifier string) (*api.ServerStartupConfig, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1834,6 +2218,9 @@ func (a *App) GetServerStartup(identifier string) (*api.ServerStartupConfig, err
 
 // UpdateServerStartupVariable updates a startup environment variable
 func (a *App) UpdateServerStartupVariable(identifier, key, value string) (*api.StartupVariable, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return nil, err
@@ -1849,6 +2236,9 @@ func (a *App) UpdateServerStartupVariable(identifier, key, value string) (*api.S
 
 // UpdateServerDockerImage updates the server's Docker image
 func (a *App) UpdateServerDockerImage(identifier, dockerImage string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1864,6 +2254,9 @@ func (a *App) UpdateServerDockerImage(identifier, dockerImage string) error {
 
 // RenameServer renames a server and its description
 func (a *App) RenameServer(identifier, name, description string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1879,6 +2272,9 @@ func (a *App) RenameServer(identifier, name, description string) error {
 
 // ReinstallServer triggers server reinstallation
 func (a *App) ReinstallServer(identifier string) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return err
@@ -1894,6 +2290,30 @@ func (a *App) ReinstallServer(identifier string) error {
 
 // DownloadServerFileTo downloads a server file to user's specified path (default to Desktop or Downloads)
 func (a *App) DownloadServerFileTo(identifier, filePath, destinationDir string) (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
+	if destinationDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		destinationDir = filepath.Join(home, "Downloads")
+	}
+	if !isAllowedDownloadDir(destinationDir) {
+		return "", fmt.Errorf("access denied: unauthorized destination directory")
+	}
+	fileName := filepath.Base(filePath)
+	if fileName == "." || fileName == ".." || fileName == "" || strings.ContainsAny(fileName, "\\/:*?\"<>|\x00\r\n") || strings.IndexFunc(fileName, func(r rune) bool { return r < 32 }) >= 0 {
+		return "", fmt.Errorf("invalid download filename")
+	}
+	// Do not follow symlinks in the final component or overwrite existing files.
+	targetFilePath := filepath.Join(destinationDir, fileName)
+	if _, err := os.Lstat(targetFilePath); err == nil {
+		return "", fmt.Errorf("download destination already exists")
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return "", err
@@ -1902,21 +2322,6 @@ func (a *App) DownloadServerFileTo(identifier, filePath, destinationDir string) 
 	if err != nil {
 		return "", err
 	}
-
-	if destinationDir == "" {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			desktop := filepath.Join(home, "Desktop")
-			if _, err := os.Stat(desktop); err == nil {
-				destinationDir = desktop
-			} else {
-				destinationDir = filepath.Join(home, "Downloads")
-			}
-		}
-	}
-
-	fileName := filepath.Base(filePath)
-	targetFilePath := filepath.Join(destinationDir, fileName)
 
 	resp, err := http.Get(downloadURL)
 	if err != nil {
@@ -1928,7 +2333,7 @@ func (a *App) DownloadServerFileTo(identifier, filePath, destinationDir string) 
 		return "", fmt.Errorf("download returned HTTP status %d", resp.StatusCode)
 	}
 
-	outFile, err := os.Create(targetFilePath)
+	outFile, err := os.OpenFile(targetFilePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return "", fmt.Errorf("failed to create local file: %w", err)
 	}
@@ -1943,8 +2348,26 @@ func (a *App) DownloadServerFileTo(identifier, filePath, destinationDir string) 
 	return targetFilePath, nil
 }
 
+func isAllowedDownloadDir(dir string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil || !filepath.IsAbs(dir) {
+		return false
+	}
+	dir = filepath.Clean(dir)
+	for _, name := range []string{"Downloads", "Desktop"} {
+		if strings.EqualFold(dir, filepath.Join(home, name)) {
+			info, err := os.Lstat(dir)
+			return err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0
+		}
+	}
+	return false
+}
+
 // DownloadServerFileWithDialog opens a native Windows Save File dialog and downloads the server file to chosen path
 func (a *App) DownloadServerFileWithDialog(identifier, filePath, defaultFileName string) (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
 	if defaultFileName == "" {
 		defaultFileName = filepath.Base(filePath)
 	}
@@ -1997,6 +2420,9 @@ func (a *App) DownloadServerFileWithDialog(identifier, filePath, defaultFileName
 
 // GetPanelCapabilities returns active capabilities and compatibility for the current panel
 func (a *App) GetPanelCapabilities() (*discovery.CompatibilityReport, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	active, err := a.panelManager.GetActivePanel()
 	if err != nil || active == nil {
 		return nil, fmt.Errorf("no active panel selected")
@@ -2022,6 +2448,17 @@ func (a *App) GetAvailablePermissions() []discovery.Permission {
 
 // OpenDetachedWindow launches a new process of PteroDesk configured in detached mode
 func (a *App) OpenDetachedWindow(config DetachedWindowConfig) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	if a.detachedConfig.IsDetached {
+		return fmt.Errorf("detached windows cannot open additional windows")
+	}
+	a.detachedMu.Lock()
+	defer a.detachedMu.Unlock()
+	if a.detachedCount >= 5 {
+		return fmt.Errorf("maximum of 5 detached windows reached")
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
@@ -2041,7 +2478,12 @@ func (a *App) OpenDetachedWindow(config DetachedWindowConfig) error {
 
 	cmd := exec.Command(exe, args...)
 	setIndependentProcessFlags(cmd)
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	a.detachedCount++
+	go func() { _ = cmd.Wait(); a.detachedMu.Lock(); a.detachedCount--; a.detachedMu.Unlock() }()
+	return nil
 }
 
 // GetDetachedModeInfo returns the detached configuration of the current process
@@ -2098,6 +2540,9 @@ type SystemDiagnostics struct {
 
 // GetSystemDiagnostics performs a complete system, security, and storage health check
 func (a *App) GetSystemDiagnostics() (*SystemDiagnostics, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	var m goruntime.MemStats
 	goruntime.ReadMemStats(&m)
 
@@ -2202,6 +2647,9 @@ type GitHubReleaseInfo struct {
 
 // CheckGitHubUpdates queries GitHub releases with support for stable & pre-release channels
 func (a *App) CheckGitHubUpdates(includePrerelease bool) (*GitHubReleaseInfo, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases", AppGitHubRepo)
 	req, err := http.NewRequestWithContext(a.ctx, "GET", url, nil)
@@ -2292,6 +2740,9 @@ func (a *App) CheckGitHubUpdates(includePrerelease bool) (*GitHubReleaseInfo, er
 
 // GetActivePanelPing returns the ping/latency in milliseconds from the client to the active panel
 func (a *App) GetActivePanelPing() int64 {
+	if a.checkSessionLock() != nil {
+		return 0
+	}
 	if a.panelManager == nil {
 		return 0
 	}
@@ -2300,6 +2751,9 @@ func (a *App) GetActivePanelPing() int64 {
 
 // PingActivePanel sends a lightweight ping to the active panel and returns latency in ms
 func (a *App) PingActivePanel() (int64, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return 0, err
+	}
 	if a.panelManager == nil {
 		return 0, fmt.Errorf("bộ quản lý panel chưa khởi tạo")
 	}

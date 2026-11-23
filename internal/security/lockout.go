@@ -37,16 +37,16 @@ type LockoutState struct {
 
 // LockoutStatus is returned to UI
 type LockoutStatus struct {
-	IsLockedOut             bool          `json:"is_locked_out"`
-	RemainingLockoutSeconds int           `json:"remaining_lockout_seconds"`
-	FailedAttempts          int           `json:"failed_attempts"`
-	ConsecutiveFails        int           `json:"consecutive_fails"`
-	MaxAttempts             int           `json:"max_attempts"`
-	LockoutDurationMinutes int           `json:"lockout_duration_minutes"`
-	EnableLockout          bool          `json:"enable_lockout"`
-	EnableAutoWipe         bool          `json:"enable_auto_wipe"`
-	WipeAttempts           int           `json:"wipe_attempts"`
-	DataWiped               bool          `json:"data_wiped"`
+	IsLockedOut             bool `json:"is_locked_out"`
+	RemainingLockoutSeconds int  `json:"remaining_lockout_seconds"`
+	FailedAttempts          int  `json:"failed_attempts"`
+	ConsecutiveFails        int  `json:"consecutive_fails"`
+	MaxAttempts             int  `json:"max_attempts"`
+	LockoutDurationMinutes  int  `json:"lockout_duration_minutes"`
+	EnableLockout           bool `json:"enable_lockout"`
+	EnableAutoWipe          bool `json:"enable_auto_wipe"`
+	WipeAttempts            int  `json:"wipe_attempts"`
+	DataWiped               bool `json:"data_wiped"`
 }
 
 // LockoutManager handles tamper-proof persistent local lockout countdown
@@ -112,7 +112,11 @@ func (lm *LockoutManager) loadState() {
 
 	raw, err := os.ReadFile(lm.filePath)
 	if err != nil {
-		// New file or missing -> save initial default
+		// A missing or unreadable lockout file on an existing installation is suspicious.
+		if _, dbErr := os.Stat(filepath.Join(filepath.Dir(lm.filePath), "pterodesk.db")); dbErr == nil {
+			lm.state.IsLockedOut = true
+			lm.state.RemainingLockoutSeconds = 15 * 60
+		}
 		lm.saveStateLocked()
 		return
 	}
@@ -219,10 +223,10 @@ func (lm *LockoutManager) GetStatus() LockoutStatus {
 		FailedAttempts:          lm.state.FailedAttempts,
 		ConsecutiveFails:        lm.state.ConsecutiveFails,
 		MaxAttempts:             lm.state.Config.MaxAttempts,
-		LockoutDurationMinutes: lm.state.Config.LockoutDurationMinutes,
-		EnableLockout:          lm.state.Config.EnableLockout,
-		EnableAutoWipe:         lm.state.Config.EnableAutoWipe,
-		WipeAttempts:           lm.state.Config.WipeAttempts,
+		LockoutDurationMinutes:  lm.state.Config.LockoutDurationMinutes,
+		EnableLockout:           lm.state.Config.EnableLockout,
+		EnableAutoWipe:          lm.state.Config.EnableAutoWipe,
+		WipeAttempts:            lm.state.Config.WipeAttempts,
 		DataWiped:               false,
 	}
 }
@@ -249,10 +253,10 @@ func (lm *LockoutManager) RecordFailedAttempt() (LockoutStatus, error) {
 			FailedAttempts:          lm.state.FailedAttempts,
 			ConsecutiveFails:        lm.state.ConsecutiveFails,
 			MaxAttempts:             cfg.MaxAttempts,
-			LockoutDurationMinutes: cfg.LockoutDurationMinutes,
-			EnableLockout:          cfg.EnableLockout,
-			EnableAutoWipe:         cfg.EnableAutoWipe,
-			WipeAttempts:           cfg.WipeAttempts,
+			LockoutDurationMinutes:  cfg.LockoutDurationMinutes,
+			EnableLockout:           cfg.EnableLockout,
+			EnableAutoWipe:          cfg.EnableAutoWipe,
+			WipeAttempts:            cfg.WipeAttempts,
 			DataWiped:               true,
 		}, nil
 	}
@@ -275,10 +279,10 @@ func (lm *LockoutManager) RecordFailedAttempt() (LockoutStatus, error) {
 		FailedAttempts:          lm.state.FailedAttempts,
 		ConsecutiveFails:        lm.state.ConsecutiveFails,
 		MaxAttempts:             cfg.MaxAttempts,
-		LockoutDurationMinutes: cfg.LockoutDurationMinutes,
-		EnableLockout:          cfg.EnableLockout,
-		EnableAutoWipe:         cfg.EnableAutoWipe,
-		WipeAttempts:           cfg.WipeAttempts,
+		LockoutDurationMinutes:  cfg.LockoutDurationMinutes,
+		EnableLockout:           cfg.EnableLockout,
+		EnableAutoWipe:          cfg.EnableAutoWipe,
+		WipeAttempts:            cfg.WipeAttempts,
 		DataWiped:               false,
 	}, nil
 }

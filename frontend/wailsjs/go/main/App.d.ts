@@ -113,6 +113,8 @@ export function GetFileContents(arg1:string,arg2:string):Promise<string>;
 
 export function GetFileDownloadURL(arg1:string,arg2:string):Promise<string>;
 
+export function GetLockType():Promise<string>;
+
 export function GetNode(arg1:number):Promise<api.Node>;
 
 export function GetPanelAccount(arg1:string):Promise<api.Account>;

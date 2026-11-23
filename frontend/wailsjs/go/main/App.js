@@ -210,6 +210,10 @@ export function GetFileDownloadURL(arg1, arg2) {
   return window['go']['main']['App']['GetFileDownloadURL'](arg1, arg2);
 }
 
+export function GetLockType() {
+  return window['go']['main']['App']['GetLockType']();
+}
+
 export function GetNode(arg1) {
   return window['go']['main']['App']['GetNode'](arg1);
 }

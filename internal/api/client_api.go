@@ -429,7 +429,7 @@ func (c *ClientAPI) GetWebSocketAuth(ctx context.Context, identifier string) (*W
 
 // ListFiles lists files in a directory
 func (c *ClientAPI) ListFiles(ctx context.Context, identifier, directory string) ([]FileObject, error) {
-	path := fmt.Sprintf("/servers/%s/files/list?directory=%s", identifier, directory)
+	path := fmt.Sprintf("/servers/%s/files/list?directory=%s", identifier, url.QueryEscape(directory))
 	data, _, err := c.http.Get(ctx, path)
 	if err != nil {
 		return nil, err
@@ -447,7 +447,7 @@ func (c *ClientAPI) ListFiles(ctx context.Context, identifier, directory string)
 
 // GetFileContents retrieves file contents
 func (c *ClientAPI) GetFileContents(ctx context.Context, identifier, filePath string) (string, error) {
-	data, _, err := c.http.Get(ctx, fmt.Sprintf("/servers/%s/files/contents?file=%s", identifier, filePath))
+	data, _, err := c.http.Get(ctx, fmt.Sprintf("/servers/%s/files/contents?file=%s", identifier, url.QueryEscape(filePath)))
 	if err != nil {
 		return "", err
 	}
@@ -997,7 +997,6 @@ func (c *ClientAPI) DeleteSchedule(ctx context.Context, identifier string, sched
 	_, _, err := c.http.Delete(ctx, fmt.Sprintf("/servers/%s/schedules/%d", identifier, scheduleID))
 	return err
 }
-
 
 // TestConnection tests if the Client API is accessible
 func (c *ClientAPI) TestConnection(ctx context.Context) error {

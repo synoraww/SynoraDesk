@@ -4,7 +4,19 @@ Tất cả những thay đổi đáng chú ý đối với dự án SynoraDesk (
 
 ## [1.0.4A] - 22-11-2026
 
-### Phát trực tuyến bảng điều khiển hiệu suất cao, Clipboard tệp toàn cầu & cải tiến IDE
+### Phát trực tuyến bảng điều khiển hiệu suất cao, Clipboard tệp toàn cầu & Cải tiến IDE
+
+#### Bảo mật & An toàn thông tin (Security Hardening & Full Audit Remediation)
+- **Vá lỗ hổng SYNORA-SEC-001**: Giới hạn và xác thực nghiêm ngặt thư mục tải tệp cục bộ (`DownloadServerFileTo`), ngăn chặn ghi tệp tùy ý vào thư mục Windows Startup hoặc tệp hệ thống.
+- **Vá lỗ hổng SYNORA-SEC-002 & SYNORA-SEC-006**: Áp dụng kiểm tra bảo vệ khóa phiên `checkSessionLock()` trên hơn 40 API endpoints của Go backend; yêu cầu xác thực mật khẩu hiện tại trước khi thay đổi cấu hình khóa.
+- **Vá lỗ hổng SYNORA-SEC-003**: Loại bỏ `dangerouslySetInnerHTML` trong `TwoFactorQRCode.tsx`, ngăn chặn triệt để Stored XSS từ SVG của máy chủ Panel.
+- **Vá lỗ hổng SYNORA-SEC-004**: Loại bỏ `ssh.InsecureIgnoreHostKey()`, triển khai cơ chế Known Hosts (Trust-On-First-Use) chống tấn công Man-in-the-Middle trên kết nối SFTP.
+- **Vá lỗ hổng SYNORA-SEC-005**: Loại bỏ lưu trữ hash mật khẩu dạng rõ trong HTML5 `localStorage`, chuyển toàn bộ logic xác thực và lưu trữ hash bảo vệ bởi Windows DPAPI.
+- **Vá lỗ hổng SYNORA-SEC-007**: Xử lý phòng thủ khi tệp `security_lockout.dat` bị xóa, chống bypass bộ đếm thử lại và tự hủy dữ liệu.
+- **Vá lỗ hổng SYNORA-SEC-008**: Chống DSN Injection và bật mã hóa TLS an toàn khi kết nối MySQL/MariaDB từ xa qua `mysql.Config`.
+- **Vá lỗ hổng SYNORA-SEC-009**: Giới hạn tối đa 5 cửa sổ tách rời (Detached Windows) mở đồng thời, chống cạn kiệt tài nguyên máy tính.
+- **Vá lỗ hổng SYNORA-SEC-010**: Bổ sung `url.QueryEscape` cho tham số tệp và thư mục trong Pterodactyl REST API.
+- **Vá lỗ hổng SYNORA-SEC-011**: Triển khai `RedactingWriter` tự động ẩn trường nhạy cảm trong hệ thống log Zerolog.
 
 #### Đã thêm
 - **Bộ phân tích nhật ký bảng điều khiển hiệu suất cao & Trình phân tích cú pháp ANSI**:
