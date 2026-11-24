@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"pterodesk/internal/database"
 )
 
 func TestSessionLockGuard_LockUnlock(t *testing.T) {
@@ -122,5 +124,46 @@ func TestLockedIPCAndConfig(t *testing.T) {
 	}
 	if isAllowedDownloadDir(filepath.Join(a.appDataDir, "Startup")) {
 		t.Fatal("unsafe download directory allowed")
+	}
+}
+
+func TestSecurityPreferencesAndRecovery(t *testing.T) {
+	tempDir := t.TempDir()
+	app := NewApp()
+	app.appDataDir = tempDir
+	db, err := database.New(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	app.db = db
+
+	// Test SecurityPreferences
+	prefs := SecurityPreferences{
+		AutoLockMinutes: 15,
+		LockOnLaunch:    true,
+	}
+	if err := app.SetSecurityPreferences(prefs); err != nil {
+		t.Fatalf("SetSecurityPreferences failed: %v", err)
+	}
+	loadedPrefs := app.GetSecurityPreferences()
+	if loadedPrefs.AutoLockMinutes != 15 || !loadedPrefs.LockOnLaunch {
+		t.Fatalf("loaded preferences mismatch: %+v", loadedPrefs)
+	}
+
+	// Test Lock Setup and DB Backup
+	pin := "5678"
+	if err := app.SetLockConfig(true, "pin4", pin, ""); err != nil {
+		t.Fatalf("SetLockConfig failed: %v", err)
+	}
+
+	// Verify setting saved in SQLite
+	b64, err := db.GetSetting("app_lock")
+	if err != nil || b64 == "" {
+		t.Fatalf("expected app_lock backup in DB, got: %s (err: %v)", b64, err)
+	}
+	lockType, err := db.GetSetting("app_lock_type")
+	if err != nil || lockType != "pin4" {
+		t.Fatalf("expected app_lock_type in DB to be pin4, got: %s", lockType)
 	}
 }

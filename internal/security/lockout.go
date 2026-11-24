@@ -112,10 +112,19 @@ func (lm *LockoutManager) loadState() {
 
 	raw, err := os.ReadFile(lm.filePath)
 	if err != nil {
-		// A missing or unreadable lockout file on an existing installation is suspicious.
-		if _, dbErr := os.Stat(filepath.Join(filepath.Dir(lm.filePath), "pterodesk.db")); dbErr == nil {
-			lm.state.IsLockedOut = true
-			lm.state.RemainingLockoutSeconds = 15 * 60
+		// A missing or unreadable lockout file on an existing installation that has an active lock is suspicious.
+		dataDir := filepath.Dir(lm.filePath)
+		hasLock := false
+		if _, lockErr := os.Stat(filepath.Join(dataDir, "app_lock.dat")); lockErr == nil {
+			hasLock = true
+		} else if _, lockErr2 := os.Stat(filepath.Join(dataDir, "app_lock_enabled")); lockErr2 == nil {
+			hasLock = true
+		}
+		if hasLock {
+			if _, dbErr := os.Stat(filepath.Join(dataDir, "pterodesk.db")); dbErr == nil {
+				lm.state.IsLockedOut = true
+				lm.state.RemainingLockoutSeconds = 15 * 60
+			}
 		}
 		lm.saveStateLocked()
 		return

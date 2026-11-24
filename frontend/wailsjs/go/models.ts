@@ -1485,6 +1485,20 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class SecurityPreferences {
+	    auto_lock_minutes: number;
+	    lock_on_launch: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SecurityPreferences(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.auto_lock_minutes = source["auto_lock_minutes"];
+	        this.lock_on_launch = source["lock_on_launch"];
+	    }
+	}
 	export class SystemDiagnostics {
 	    appVersion: string;
 	    wailsVersion: string;

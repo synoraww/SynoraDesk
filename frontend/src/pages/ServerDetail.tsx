@@ -126,6 +126,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
   initialTab,
   isDetachedWindow,
 }) => {
+  const { t } = useI18n();
   const {
     selectedServer,
     fetchServer,
@@ -134,6 +135,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     sendPowerAction,
   } = useServerStore();
 
+  const server = selectedServer;
   const { activePanel } = usePanelStore();
   const { addNotification } = useUIStore();
 
@@ -384,7 +386,6 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
 
   // Workspace & i18n
   const { editorOpenInNewTab, openFileInTab } = useWorkspaceStore();
-  const { t } = useI18n();
   const [consoleSearch, setConsoleSearch] = useState('');
 
   // Startup & Environment state
@@ -1701,7 +1702,6 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     }
   };
 
-  const server = selectedServer;
   const usage = resources[identifier];
   const currentState = optimisticState || usage?.current_state || (server?.is_suspended ? 'suspended' : 'offline');
 

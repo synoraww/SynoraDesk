@@ -202,6 +202,10 @@ export function GetSecurityLockoutStatus() {
   return window['go']['main']['App']['GetSecurityLockoutStatus']();
 }
 
+export function GetSecurityPreferences() {
+  return window['go']['main']['App']['GetSecurityPreferences']();
+}
+
 export function GetServer(arg1) {
   return window['go']['main']['App']['GetServer'](arg1);
 }
@@ -372,6 +376,10 @@ export function SendServerPowerWS(arg1) {
 
 export function SetLockConfig(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SetLockConfig'](arg1, arg2, arg3, arg4);
+}
+
+export function SetSecurityPreferences(arg1) {
+  return window['go']['main']['App']['SetSecurityPreferences'](arg1);
 }
 
 export function SetServerAllocationNote(arg1, arg2, arg3) {

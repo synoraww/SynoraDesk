@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import {
   GetSecurityLockoutStatus,
+  GetSecurityPreferences,
   GetLockType,
   IsSessionLocked,
   LockSession,
   SetLockConfig,
+  SetSecurityPreferences,
   UnlockSession,
   UpdateSecurityLockoutConfig,
 } from '../../wailsjs/go/main/App';
@@ -79,7 +81,26 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     try {
       const type = (await GetLockType()) as LockType;
       const locked = await IsSessionLocked();
-      set({ lockType: type, isLocked: locked });
+      let effectiveLockOnLaunch = true;
+      let effectiveAutoLock = 0;
+      try {
+        const prefs = await GetSecurityPreferences();
+        if (prefs) {
+          effectiveLockOnLaunch = prefs.lock_on_launch ?? (type !== 'none');
+          effectiveAutoLock = prefs.auto_lock_minutes ?? 0;
+        }
+      } catch {}
+
+      localStorage.setItem('pterodesk_lock_type', type);
+      localStorage.setItem('pterodesk_lock_on_launch', String(effectiveLockOnLaunch));
+      localStorage.setItem('pterodesk_autolock_minutes', String(effectiveAutoLock));
+
+      set({
+        lockType: type,
+        isLocked: locked,
+        lockOnLaunch: effectiveLockOnLaunch,
+        autoLockMinutes: effectiveAutoLock,
+      });
     } catch {
       set({ isLocked: true });
     }
@@ -182,7 +203,24 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       localStorage.removeItem('pterodesk_passcode_hash');
       localStorage.removeItem('pterodesk_salt');
       localStorage.setItem('pterodesk_lock_type', type);
-      set({ lockType: type, isLocked: false, failedAttempts: 0, isLockedOut: false, remainingLockoutSeconds: 0 });
+      const isEnabling = type !== 'none';
+      if (isEnabling) {
+        localStorage.setItem('pterodesk_lock_on_launch', 'true');
+        try {
+          await SetSecurityPreferences({
+            auto_lock_minutes: get().autoLockMinutes,
+            lock_on_launch: true,
+          } as any);
+        } catch {}
+      }
+      set({
+        lockType: type,
+        isLocked: false,
+        lockOnLaunch: isEnabling ? true : get().lockOnLaunch,
+        failedAttempts: 0,
+        isLockedOut: false,
+        remainingLockoutSeconds: 0,
+      });
       get().resetActivityTimer();
       return true;
     } catch {
@@ -214,11 +252,23 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     localStorage.setItem('pterodesk_autolock_minutes', String(minutes));
     set({ autoLockMinutes: minutes });
     get().resetActivityTimer();
+    try {
+      SetSecurityPreferences({
+        auto_lock_minutes: minutes,
+        lock_on_launch: get().lockOnLaunch,
+      } as any);
+    } catch {}
   },
 
   setLockOnLaunch: (enabled: boolean) => {
     localStorage.setItem('pterodesk_lock_on_launch', String(enabled));
     set({ lockOnLaunch: enabled });
+    try {
+      SetSecurityPreferences({
+        auto_lock_minutes: get().autoLockMinutes,
+        lock_on_launch: enabled,
+      } as any);
+    } catch {}
   },
 
   setEncryptDatabase: (enabled: boolean) => {

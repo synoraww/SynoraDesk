@@ -107,6 +107,8 @@ export function GetRecentServers():Promise<Array<database.RecentServerRecord>>;
 
 export function GetSecurityLockoutStatus():Promise<security.LockoutStatus>;
 
+export function GetSecurityPreferences():Promise<main.SecurityPreferences>;
+
 export function GetServer(arg1:string):Promise<api.Server>;
 
 export function GetServerDetails(arg1:string):Promise<api.Server>;
@@ -192,6 +194,8 @@ export function SendServerCommand(arg1:string):Promise<void>;
 export function SendServerPowerWS(arg1:string):Promise<void>;
 
 export function SetLockConfig(arg1:boolean,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function SetSecurityPreferences(arg1:main.SecurityPreferences):Promise<void>;
 
 export function SetServerAllocationNote(arg1:string,arg2:number,arg3:string):Promise<api.Allocation>;
 

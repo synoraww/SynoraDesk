@@ -12,6 +12,7 @@ import { SettingsPage } from './pages/Settings';
 import { FileEditorTab } from './components/common/FileEditorTab';
 import { WelcomeModal } from './components/common/WelcomeModal';
 import { MultiTabAlertBanner } from './components/common/MultiTabAlertBanner';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { APP_CONFIG } from './config/version';
 import { usePanelStore } from './stores/panelStore';
 import { useSecurityStore } from './stores/securityStore';
@@ -402,30 +403,32 @@ export function App() {
         )}
 
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 2 }}>
-          {detachedConfig.type === 'file-editor' && detachedConfig.server && detachedConfig.filePath ? (
-            <FileEditorTab
-              serverIdentifier={detachedConfig.server}
-              filePath={detachedConfig.filePath}
-              tabId="detached-file-editor"
-            />
-          ) : detachedConfig.server ? (
-            <ServerDetail
-              identifier={detachedConfig.server}
-              onBack={handleClose}
-              initialTab={detachedConfig.subtab || 'ide'}
-              isDetachedWindow={true}
-            />
-          ) : detachedConfig.type === 'nodes' ? (
-            <NodesPage onOpenPanelModal={() => setIsPanelModalOpen(true)} />
-          ) : detachedConfig.type === 'apikeys' ? (
-            <PanelManager onOpenModal={() => setIsPanelModalOpen(true)} />
-          ) : detachedConfig.type === 'settings' ? (
-            <SettingsPage />
-          ) : (
-            <div style={{ padding: '24px', color: 'var(--color-text)' }}>
-              Cửa sổ riêng độc lập
-            </div>
-          )}
+          <ErrorBoundary>
+            {detachedConfig.type === 'file-editor' && detachedConfig.server && detachedConfig.filePath ? (
+              <FileEditorTab
+                serverIdentifier={detachedConfig.server}
+                filePath={detachedConfig.filePath}
+                tabId="detached-file-editor"
+              />
+            ) : detachedConfig.server ? (
+              <ServerDetail
+                identifier={detachedConfig.server}
+                onBack={handleClose}
+                initialTab={detachedConfig.subtab || 'ide'}
+                isDetachedWindow={true}
+              />
+            ) : detachedConfig.type === 'nodes' ? (
+              <NodesPage onOpenPanelModal={() => setIsPanelModalOpen(true)} />
+            ) : detachedConfig.type === 'apikeys' ? (
+              <PanelManager onOpenModal={() => setIsPanelModalOpen(true)} />
+            ) : detachedConfig.type === 'settings' ? (
+              <SettingsPage />
+            ) : (
+              <div style={{ padding: '24px', color: 'var(--color-text)' }}>
+                Cửa sổ riêng độc lập
+              </div>
+            )}
+          </ErrorBoundary>
         </div>
 
         {/* Floating Zoom Indicator Pill */}
@@ -487,7 +490,9 @@ export function App() {
                 width: '100%',
               }}
             >
-              {renderTabContent(tab)}
+              <ErrorBoundary>
+                {renderTabContent(tab)}
+              </ErrorBoundary>
             </div>
           );
         })}

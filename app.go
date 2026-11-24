@@ -97,12 +97,31 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.db = db
 	// Load the verifier before exposing any IPC methods to the WebView.
-	if raw, err := os.ReadFile(filepath.Join(a.appDataDir, "data", "app_lock.dat")); err == nil {
+	lockPath := filepath.Join(a.appDataDir, "data", "app_lock.dat")
+	markerPath := filepath.Join(a.appDataDir, "data", "app_lock_enabled")
+	raw, err := os.ReadFile(lockPath)
+	if err != nil && os.IsNotExist(err) && a.db != nil {
+		// Recovery from persistent database backup: ensures security lock survives reinstallations or file cleanups
+		if backupB64, dbErr := a.db.GetSetting("app_lock"); dbErr == nil && backupB64 != "" {
+			if decoded, decErr := base64.StdEncoding.DecodeString(backupB64); decErr == nil && len(decoded) > 0 {
+				raw = decoded
+				err = nil
+				_ = os.WriteFile(lockPath, raw, 0600)
+				_ = os.WriteFile(markerPath, []byte("enabled"), 0600)
+				logger.Logger.Info().Msg("Restored app lock configuration from persistent database backup")
+			}
+		}
+	}
+	if err == nil {
 		if plain, err := security.Decrypt(raw); err == nil {
 			var stored struct{ Type, Salt, Hash string }
 			if json.Unmarshal(plain, &stored) == nil && stored.Hash != "" && stored.Salt != "" {
 				a.lockConfigType, a.lockConfigSalt, a.lockConfigHash = stored.Type, stored.Salt, stored.Hash
 				a.lockConfigEnabled, a.sessionLocked = true, true
+				if a.db != nil {
+					_ = a.db.SaveSetting("app_lock", base64.StdEncoding.EncodeToString(raw))
+					_ = a.db.SaveSetting("app_lock_type", stored.Type)
+				}
 			} else {
 				logger.Logger.Error().Msg("Invalid app lock configuration; refusing to unlock")
 				a.lockConfigEnabled, a.sessionLocked = true, true
@@ -340,6 +359,10 @@ func (a *App) SetLockConfig(enabled bool, lockType string, passcode string, curr
 		if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
 			return err
 		}
+		if a.db != nil {
+			_ = a.db.SaveSetting("app_lock", "")
+			_ = a.db.SaveSetting("app_lock_type", "")
+		}
 		a.lockConfigEnabled, a.sessionLocked = false, false
 		a.lockConfigHash, a.lockConfigSalt, a.lockConfigType = "", "", "none"
 		return nil
@@ -371,6 +394,11 @@ func (a *App) SetLockConfig(enabled bool, lockType string, passcode string, curr
 	}
 	if err := os.WriteFile(marker, []byte("enabled"), 0600); err != nil {
 		return err
+	}
+	if a.db != nil {
+		_ = a.db.SaveSetting("app_lock", base64.StdEncoding.EncodeToString(encrypted))
+		_ = a.db.SaveSetting("app_lock_type", lockType)
+		_ = a.db.SaveSetting("security_lock_on_launch", "true")
 	}
 	a.lockConfigType, a.lockConfigSalt, a.lockConfigHash = lockType, hex.EncodeToString(salt), hex.EncodeToString(hash)
 	a.lockConfigEnabled, a.sessionLocked = true, false
@@ -443,6 +471,40 @@ func (a *App) UnlockSession(passcode string) (bool, error) {
 		_, _ = a.lockoutManager.RecordFailedAttempt()
 	}
 	return false, fmt.Errorf("invalid passcode")
+}
+
+// SecurityPreferences holds session lock preferences persisted in database
+type SecurityPreferences struct {
+	AutoLockMinutes int  `json:"auto_lock_minutes"`
+	LockOnLaunch    bool `json:"lock_on_launch"`
+}
+
+// GetSecurityPreferences returns saved security preferences from persistent storage
+func (a *App) GetSecurityPreferences() SecurityPreferences {
+	prefs := SecurityPreferences{
+		AutoLockMinutes: 0,
+		LockOnLaunch:    true,
+	}
+	if a.db != nil {
+		if val, err := a.db.GetSetting("security_autolock_minutes"); err == nil && val != "" {
+			if mins, err := strconv.Atoi(val); err == nil {
+				prefs.AutoLockMinutes = mins
+			}
+		}
+		if val, err := a.db.GetSetting("security_lock_on_launch"); err == nil && val != "" {
+			prefs.LockOnLaunch = val == "true"
+		}
+	}
+	return prefs
+}
+
+// SetSecurityPreferences persists security preferences to database
+func (a *App) SetSecurityPreferences(prefs SecurityPreferences) error {
+	if a.db != nil {
+		_ = a.db.SaveSetting("security_autolock_minutes", strconv.Itoa(prefs.AutoLockMinutes))
+		_ = a.db.SaveSetting("security_lock_on_launch", strconv.FormatBool(prefs.LockOnLaunch))
+	}
+	return nil
 }
 
 // checkSessionLock returns error if lock is enabled and session is locked

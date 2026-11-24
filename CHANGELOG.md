@@ -2,6 +2,23 @@
 
 Tất cả những thay đổi đáng chú ý đối với dự án SynoraDesk (PteroDesk) sẽ được ghi lại trong tệp này.
 
+## [1.0.5A] - 24-11-2026
+
+### Sửa lỗi quan trọng (Critical Bug Fixes) & Ổn định hệ thống
+- **Sửa lỗi đen ứng dụng khi bấm vào máy chủ (Server Detail)**: Khắc phục lỗi `ReferenceError` do truy cập hàm dịch thuật `t` trước khi khởi tạo trong `useState`; di chuyển toàn bộ hook lên đầu component và khai báo `server` an toàn.
+- **Bổ sung ErrorBoundary bảo vệ giao diện**: Tích hợp component `ErrorBoundary` bọc ngoài toàn bộ các tab và cửa sổ riêng độc lập, ngăn chặn hoàn toàn hiện tượng sập trắng/đen màn hình khi gặp ngoại lệ render.
+- **Sửa lỗi mất khóa bảo vệ (App Lock) khi gỡ ra cài lại**:
+  - Tự động sao lưu cấu hình khóa đã mã hóa Windows DPAPI (`app_lock`) và loại khóa (`app_lock_type`) vào bảng `settings` trong database SQLite `pterodesk.db`.
+  - Cơ chế tự phục hồi: Khôi phục `app_lock.dat` và `app_lock_enabled` tự động từ database nếu file bị dọn dẹp khi cài đặt lại.
+  - Thêm API backend quản lý tùy chọn bảo mật (`GetSecurityPreferences` & `SetSecurityPreferences`) lưu giữ thiết lập `security_lock_on_launch` và `security_autolock_minutes`.
+  - Tinh chỉnh điều kiện kích hoạt `lockout` khi thiếu file để không ảnh hưởng đến người dùng chưa thiết lập khóa bảo vệ.
+- **Tối ưu Console Viewer & Đa ngôn ngữ (i18n)**:
+  - Tối ưu co giãn tự nhiên nhiều dòng text dài với `word-break: break-all`.
+  - Hoàn thiện bản dịch song ngữ Anh - Việt cho toàn bộ bảng điều khiển máy chủ và Server IDE.
+  - Loại bỏ các module cũ SFTP Client và Database Manager độc lập.
+
+---
+
 ## [1.0.4A] - 22-11-2026
 
 ### Phát trực tuyến bảng điều khiển hiệu suất cao, Clipboard tệp toàn cầu & Cải tiến IDE
