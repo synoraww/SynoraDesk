@@ -6,7 +6,7 @@ Các bản cập nhật bảo mật và bản vá lỗ hổng bảo mật đư�
 
 | Phiên bản | Trạng thái | Hỗ trợ bảo mật | Hành động được đề xuất |
 | :--- | :--- | :--- | :--- |
-| **v1.04A** | **Ổn định hiện tại** | ✅ **Hỗ trợ đầy đủ tích cực** | Đề xuất cho tất cả người dùng |
+| **v1.05A** | **Ổn định hiện tại** | ✅ **Hỗ trợ đầy đủ tích cực** | Đề xuất cho tất cả người dùng |
 | **< v1.0.4A** | Không được hỗ trợ | ❌ Đã hết vòng đời (EOL) | Không được hỗ trợ |
 
 ---

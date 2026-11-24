@@ -52,7 +52,8 @@
     "multiTabTitle": "Phát hiện mở 2 tab:",
     "multiTabDesc": "SynoraDesk đang được mở ở một tab khác. Để tránh xung đột dữ liệu phiên và bộ nhớ, bạn nên sử dụng tab trước đó.",
     "useThisTab": "Sử dụng tab này",
-    "dismiss": "Bỏ qua"
+    "dismiss": "Bỏ qua",
+    "create": "Tạo"
   },
   "nav": {
     "servers": "Máy chủ",
@@ -286,7 +287,20 @@
     "copiedClipboard": "Đã sao chép vào bộ nhớ tạm",
     "cutClipboard": "Đã cắt vào bộ nhớ tạm",
     "emptyDirectory": "Thư mục trống",
-    "emptyAreaTip": "Nhấp chuột phải để tạo tệp, thư mục hoặc tải tệp lên"
+    "emptyAreaTip": "Nhấp chuột phải để tạo tệp, thư mục hoặc tải tệp lên",
+    "linesCount": "{count} dòng",
+    "send": "Gửi",
+    "newFilePrompt": "Tạo tệp mới:",
+    "newFolderPrompt": "Tạo thư mục mới:",
+    "loadingFiles": "Đang tải cấu trúc tệp...",
+    "noFileSelected": "Chọn tệp từ cây bên trái để mở soạn thảo.",
+    "locked": "Đã khóa",
+    "lock": "Khóa",
+    "containerHeader": "Kết nối trực tiếp API hệ thống tệp và bảng điều khiển container của {serverName}.",
+    "unsavedWithShortcut": "Chưa lưu (Ctrl+S)",
+    "synced": "Đã đồng bộ",
+    "remoteFilePlaceholder": "https://example.com/file.zip",
+    "pluginPlaceholder": "plugin.jar"
   },
   "servers": {
     "noPanelTitle": "Chưa chọn Panel",
@@ -449,7 +463,15 @@
     "noCommand": "(Lệnh khởi động chưa được render)",
     "rawTitle": "Template Gốc (Raw Command từ Egg):",
     "rawHelp": "Các thẻ dạng {{VARIABLE}} sẽ được thay thế bằng giá trị tương ứng của biến môi trường bên dưới khi máy chủ bắt đầu chạy.",
-    "envVariables": "Biến Môi Trường (Environment Variables)"
+    "envVariables": "Biến Môi Trường (Environment Variables)",
+    "filterAll": "Tất cả",
+    "filterEditable": "Có thể sửa",
+    "filterCustom": "Đã tùy chỉnh",
+    "noVariablesFound": "Không tìm thấy biến môi trường nào phù hợp với bộ lọc.",
+    "noValue": "Chưa có giá trị",
+    "defaultValue": "Mặc định:",
+    "boolFalse": "0 (False / Tắt)",
+    "boolTrue": "1 (True / Bật)"
   },
   "files": {
     "wordWrap": "Bật/tắt ngắt dòng",
@@ -533,7 +555,7 @@
     "localDataDesc": "Vị trí lưu SQLite WAL và thư mục kiểm tra tệp",
     "aboutTitle": "Thông tin SynoraDesk",
     "aboutDesc": "Chương trình quản lý máy chủ Pterodactyl thông API cực VUÝP.",
-    "version": "SynoraDesk 1.04A (Ứng dụng máy tính Windows x64)",
+    "version": "SynoraDesk 1.05A (Ứng dụng máy tính Windows x64)",
     "builtWith": "Xây dựng với Go + Wails v2 + React 19",
     "animationTitle": "Hiệu ứng chuyển động (Animation)",
     "animationSubtitle": "Tùy chỉnh độ mượt mà hoặc chế độ nhẹ nhàng để tiết kiệm tài nguyên",
@@ -1121,7 +1143,15 @@
     "emptyAreaNewFolder": "Tạo thư mục mới",
     "emptyAreaUpload": "Tải lên tệp",
     "emptyAreaPull": "Kéo tệp từ URL",
-    "emptyAreaRefresh": "Làm mới"
+    "emptyAreaRefresh": "Làm mới",
+    "goBack": "(Quay lại)",
+    "cpuTooltip": "CPU: {percent}% / {max} (Đang dùng {capacity}% công suất tối đa)",
+    "ramTooltip": "RAM: {current} MB / {max} ({capacity}% tải)",
+    "diskTooltip": "Disk: {current} MB / {max} ({capacity}% dung lượng)",
+    "networkAllocationsTitle": "Cấu hình mạng & Port kết nối",
+    "remoteJarPlaceholder": "https://example.com/server.jar",
+    "editable": "Có thể sửa",
+    "readOnly": "Chỉ đọc"
   },
   "titlebar": {
     "minimize": "Thu nhỏ",
@@ -1177,7 +1207,7 @@
     "upToDate": "Bạn đang sử dụng phiên bản mới nhất!",
     "currentVersion": "Phiên bản hiện tại",
     "newVersionAvailable": "Đã có bản cập nhật mới!",
-    "recentImprovements": "Tính năng mới nổi bật (v1.04A)",
+    "recentImprovements": "Tính năng mới nổi bật (v1.05A)",
     "checking": "Đang kiểm tra...",
     "checkAgain": "Kiểm tra lại"
   },
@@ -1233,5 +1263,16 @@
     "resetConfirmDesc": "Thao tác này sẽ xóa sạch toàn bộ cấu hình, Panels, cơ sở dữ liệu SQLite và khóa mã hóa trên máy tính này. Ứng dụng sẽ được làm mới hoàn toàn. Bạn có chắc chắn không?",
     "revisitTerms": "Xem lại Điều khoản & Cam kết dữ liệu",
     "wipeDataSuccess": "Đã xóa toàn bộ dữ liệu ứng dụng thành công"
+  },
+  "console": {
+    "connecting": "Đang kết nối tới daemon WebSocket...",
+    "loadingState": "Đang tải trạng thái máy chủ...",
+    "filterPlaceholder": "Lọc log...",
+    "autoScrollEnabled": "Tự cuộn đang bật (Nhấn để tắt)",
+    "autoScrollDisabled": "Tự cuộn đang tắt (Nhấn để bật)",
+    "clearConsole": "Xóa trắng màn hình console",
+    "scrollToBottom": "Cuộn xuống cuối log",
+    "inputPlaceholder": "Nhập lệnh console...",
+    "sendCommand": "Gửi lệnh (Enter)"
   }
 }

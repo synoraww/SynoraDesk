@@ -24,7 +24,6 @@ func main() {
 	serverFlag := flag.String("server", "", "Server identifier for detached mode")
 	subtabFlag := flag.String("subtab", "ide", "Subtab for detached mode")
 	fileFlag := flag.String("file", "", "File path for editor")
-	sftpFlag := flag.Bool("sftp", false, "Is SFTP file")
 	titleFlag := flag.String("title", "", "Window title")
 	flag.Parse()
 
@@ -42,7 +41,6 @@ func main() {
 			Server:     *serverFlag,
 			Subtab:     *subtabFlag,
 			FilePath:   *fileFlag,
-			IsSFTP:     *sftpFlag,
 			Title:      *titleFlag,
 		}
 		if *titleFlag != "" {

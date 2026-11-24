@@ -2,7 +2,6 @@ package main
 
 import (
 	"path/filepath"
-	"pterodesk/internal/dbclient"
 	"strings"
 	"testing"
 )
@@ -109,7 +108,7 @@ func TestLockedIPCAndConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.LockSession()
-	checks := []error{a.WriteFile("", "", ""), a.SendServerCommand(""), a.ConnectDatabase(dbclient.DBConfig{}), a.WipeAllData(), a.OpenDetachedWindow(DetachedWindowConfig{})}
+	checks := []error{a.WriteFile("", "", ""), a.SendServerCommand(""), a.WipeAllData(), a.OpenDetachedWindow(DetachedWindowConfig{})}
 	for _, err := range checks {
 		if err == nil || !strings.Contains(err.Error(), "app is locked") {
 			t.Fatalf("expected lock error, got %v", err)

@@ -24,12 +24,10 @@ import (
 
 	"pterodesk/internal/api"
 	"pterodesk/internal/database"
-	"pterodesk/internal/dbclient"
 	"pterodesk/internal/logger"
 	"pterodesk/internal/panel"
 	"pterodesk/internal/pterodactyl/discovery"
 	"pterodesk/internal/security"
-	"pterodesk/internal/sftp"
 )
 
 // DetachedWindowConfig holds settings for a detached standalone window
@@ -39,7 +37,6 @@ type DetachedWindowConfig struct {
 	Server     string `json:"server"`   // server identifier
 	Subtab     string `json:"subtab"`   // console, files, startup, etc.
 	FilePath   string `json:"filePath"` // for file editor
-	IsSFTP     bool   `json:"isSftp"`
 	Title      string `json:"title"`
 }
 
@@ -49,9 +46,6 @@ type App struct {
 	db                  *database.DB
 	credentials         *security.CredentialStore
 	panelManager        *panel.Manager
-	sftpSessions        *sftp.SessionManager
-	activeSFTP          *sftp.Client
-	activeDB            *dbclient.Client
 	activeConsoleWS     *api.ServerWebSocket
 	activeConsoleServer string
 	wsMu                sync.Mutex
@@ -94,7 +88,6 @@ func (a *App) startup(ctx context.Context) {
 	// Initialize lockout before creating the database so a fresh install is distinguishable
 	// from an existing installation whose lockout file was deleted.
 	a.credentials = security.NewCredentialStore()
-	a.sftpSessions = sftp.NewSessionManager()
 	a.lockoutManager = security.NewLockoutManager(filepath.Join(a.appDataDir, "data"), a.credentials, func() { _ = a.wipeAllData() })
 	// Initialize database
 	db, err := database.New(a.appDataDir)
@@ -290,15 +283,6 @@ func (a *App) WipeAllData() error {
 func (a *App) wipeAllData() error {
 	logger.Logger.Warn().Msg("SECURITY ALERT: Initiating complete data wipe due to maximum failed passcode attempts")
 	a.disconnectServerConsole()
-	if a.sftpSessions != nil {
-		a.sftpSessions.CloseAll()
-	}
-	if a.activeSFTP != nil {
-		a.activeSFTP.Close()
-	}
-	if a.activeDB != nil {
-		a.activeDB.Close()
-	}
 	if a.db != nil {
 		a.db.Close()
 	}
@@ -484,15 +468,6 @@ func (a *App) shutdown(ctx context.Context) {
 		_ = a.SaveWindowState(w, h, x, y, isMax)
 	}
 	a.disconnectServerConsole()
-	if a.sftpSessions != nil {
-		a.sftpSessions.CloseAll()
-	}
-	if a.activeSFTP != nil {
-		a.activeSFTP.Close()
-	}
-	if a.activeDB != nil {
-		a.activeDB.Close()
-	}
 	if a.db != nil {
 		a.db.Close()
 	}
@@ -1083,34 +1058,6 @@ func (a *App) UploadServerFileDirect(identifier, directory, filename, base64Cont
 	return client.UploadFileDirect(a.ctx, identifier, directory, filename, data)
 }
 
-// ChmodServerSFTPFile chmods a file over SFTP
-func (a *App) ChmodServerSFTPFile(serverID, path, modeStr string) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	cli, err := a.sftpSessions.Get(serverID)
-	if err != nil {
-		return err
-	}
-	modeUint, err := strconv.ParseUint(modeStr, 8, 32)
-	if err != nil {
-		return fmt.Errorf("invalid octal mode: %w", err)
-	}
-	return cli.Chmod(path, os.FileMode(modeUint))
-}
-
-// RenameServerSFTPFile renames a file over SFTP
-func (a *App) RenameServerSFTPFile(serverID, oldPath, newPath string) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	cli, err := a.sftpSessions.Get(serverID)
-	if err != nil {
-		return err
-	}
-	return cli.Rename(oldPath, newPath)
-}
-
 // --- Node Bindings (Application API) ---
 
 // ListNodes lists all nodes
@@ -1497,249 +1444,6 @@ func (a *App) RemoveCustomBackground() error {
 		_ = os.Remove(path)
 	}
 	_ = a.db.SaveSetting("custom_bg_path", "")
-	return nil
-}
-
-// --- Server-Integrated SFTP File Manager Bindings ---
-
-// ConnectServerSFTP connects a server directly to SFTP
-func (a *App) ConnectServerSFTP(serverID, host string, port int, username, password string) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	_, err := a.sftpSessions.Connect(serverID, sftp.SFTPConfig{
-		Host:           host,
-		Port:           port,
-		Username:       username,
-		Password:       password,
-		KnownHostsPath: filepath.Join(a.appDataDir, "data", "sftp_known_hosts"),
-	})
-	if err != nil {
-		logger.Logger.Error().Err(err).Str("server", serverID).Msg("Server SFTP connection failed")
-		return err
-	}
-	logger.Logger.Info().Str("server", serverID).Msg("Server SFTP connected")
-	a.logActivity(a.panelManager.GetActivePanelID(), "", serverID, "sftp.connect", "success", "")
-	return nil
-}
-
-// IsServerSFTPConnected checks if server SFTP is active
-func (a *App) IsServerSFTPConnected(serverID string) bool {
-	if a.checkSessionLock() != nil {
-		return false
-	}
-	if a.sftpSessions == nil {
-		return false
-	}
-	return a.sftpSessions.IsConnected(serverID)
-}
-
-// DisconnectServerSFTP terminates SFTP for a server
-func (a *App) DisconnectServerSFTP(serverID string) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	if a.sftpSessions == nil {
-		return nil
-	}
-	return a.sftpSessions.Disconnect(serverID)
-}
-
-// ListServerSFTPFiles lists files via SFTP
-func (a *App) ListServerSFTPFiles(serverID, path string) ([]sftp.FileEntry, error) {
-	if err := a.checkSessionLock(); err != nil {
-		return nil, err
-	}
-	cli, err := a.sftpSessions.Get(serverID)
-	if err != nil {
-		return nil, err
-	}
-	return cli.ListDirectory(path)
-}
-
-// ReadServerSFTPFile reads file content via SFTP
-func (a *App) ReadServerSFTPFile(serverID, path string) (string, error) {
-	if err := a.checkSessionLock(); err != nil {
-		return "", err
-	}
-	cli, err := a.sftpSessions.Get(serverID)
-	if err != nil {
-		return "", err
-	}
-	return cli.ReadFile(path)
-}
-
-// WriteServerSFTPFile writes file content via SFTP
-func (a *App) WriteServerSFTPFile(serverID, path, content string) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	cli, err := a.sftpSessions.Get(serverID)
-	if err != nil {
-		return err
-	}
-	return cli.WriteFile(path, content)
-}
-
-// DeleteServerSFTPFile deletes file or folder via SFTP
-func (a *App) DeleteServerSFTPFile(serverID, path string) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	cli, err := a.sftpSessions.Get(serverID)
-	if err != nil {
-		return err
-	}
-	return cli.Remove(path)
-}
-
-// CreateServerSFTPFolder creates folder via SFTP
-func (a *App) CreateServerSFTPFolder(serverID, path string) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	cli, err := a.sftpSessions.Get(serverID)
-	if err != nil {
-		return err
-	}
-	return cli.CreateDirectory(path)
-}
-
-// UploadServerSFTPFile uploads base64 data to remote path via SFTP
-func (a *App) UploadServerSFTPFile(serverID, path, base64Content string) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	cli, err := a.sftpSessions.Get(serverID)
-	if err != nil {
-		return err
-	}
-	data, err := sftp.Base64ToBytes(base64Content)
-	if err != nil {
-		return fmt.Errorf("invalid base64 content: %w", err)
-	}
-	return cli.UploadBytes(path, data)
-}
-
-// --- SFTP Explorer Bindings ---
-
-// ConnectSFTP establishes an SFTP session
-func (a *App) ConnectSFTP(cfg sftp.SFTPConfig) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	cfg.KnownHostsPath = filepath.Join(a.appDataDir, "data", "sftp_known_hosts")
-	if a.activeSFTP != nil {
-		a.activeSFTP.Close()
-	}
-	client, err := sftp.NewClient(cfg)
-	if err != nil {
-		logger.Logger.Error().Err(err).Str("host", cfg.Host).Msg("SFTP connection failed")
-		return err
-	}
-	a.activeSFTP = client
-	logger.Logger.Info().Str("host", cfg.Host).Msg("SFTP connection established")
-	return nil
-}
-
-// ListSFTPFiles lists files in a directory via SFTP
-func (a *App) ListSFTPFiles(remotePath string) ([]sftp.FileEntry, error) {
-	if err := a.checkSessionLock(); err != nil {
-		return nil, err
-	}
-	if a.activeSFTP == nil {
-		return nil, fmt.Errorf("no active SFTP session")
-	}
-	return a.activeSFTP.ListDirectory(remotePath)
-}
-
-// ReadSFTPFile reads remote text file content
-func (a *App) ReadSFTPFile(remotePath string) (string, error) {
-	if err := a.checkSessionLock(); err != nil {
-		return "", err
-	}
-	if a.activeSFTP == nil {
-		return "", fmt.Errorf("no active SFTP session")
-	}
-	return a.activeSFTP.ReadFile(remotePath)
-}
-
-// WriteSFTPFile writes text file content to remote path
-func (a *App) WriteSFTPFile(remotePath, content string) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	if a.activeSFTP == nil {
-		return fmt.Errorf("no active SFTP session")
-	}
-	return a.activeSFTP.WriteFile(remotePath, content)
-}
-
-// CloseSFTP closes the active SFTP session
-func (a *App) CloseSFTP() error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	if a.activeSFTP != nil {
-		err := a.activeSFTP.Close()
-		a.activeSFTP = nil
-		return err
-	}
-	return nil
-}
-
-// --- Database Client Bindings (MySQL / MariaDB) ---
-
-// ConnectDatabase opens a MySQL connection
-func (a *App) ConnectDatabase(cfg dbclient.DBConfig) error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	if a.activeDB != nil {
-		a.activeDB.Close()
-	}
-	client, err := dbclient.NewClient(cfg)
-	if err != nil {
-		logger.Logger.Error().Err(err).Str("host", cfg.Host).Msg("Database connection failed")
-		return err
-	}
-	a.activeDB = client
-	logger.Logger.Info().Str("host", cfg.Host).Str("database", cfg.Database).Msg("Database connected")
-	return nil
-}
-
-// ExecuteSQL executes a SQL query and returns results
-func (a *App) ExecuteSQL(query string) (*dbclient.QueryResult, error) {
-	if err := a.checkSessionLock(); err != nil {
-		return nil, err
-	}
-	if a.activeDB == nil {
-		return nil, fmt.Errorf("no active database connection")
-	}
-	return a.activeDB.ExecuteQuery(a.ctx, query)
-}
-
-// ListSQLTables lists all tables in the active database
-func (a *App) ListSQLTables() ([]string, error) {
-	if err := a.checkSessionLock(); err != nil {
-		return nil, err
-	}
-	if a.activeDB == nil {
-		return nil, fmt.Errorf("no active database connection")
-	}
-	return a.activeDB.ListTables(a.ctx)
-}
-
-// CloseDatabase closes the database connection
-func (a *App) CloseDatabase() error {
-	if err := a.checkSessionLock(); err != nil {
-		return err
-	}
-	if a.activeDB != nil {
-		err := a.activeDB.Close()
-		a.activeDB = nil
-		return err
-	}
 	return nil
 }
 
@@ -2471,9 +2175,6 @@ func (a *App) OpenDetachedWindow(config DetachedWindowConfig) error {
 		fmt.Sprintf("-subtab=%s", config.Subtab),
 		fmt.Sprintf("-file=%s", config.FilePath),
 		fmt.Sprintf("-title=%s", config.Title),
-	}
-	if config.IsSFTP {
-		args = append(args, "-sftp=true")
 	}
 
 	cmd := exec.Command(exe, args...)

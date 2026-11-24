@@ -159,7 +159,6 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
         server: identifier,
         subtab: activeTab,
         filePath: '',
-        isSftp: false,
         title: `${server?.name || identifier} - ${activeTab.toUpperCase()}`,
       }));
       addNotification({
@@ -201,9 +200,9 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
   const [reinstallConfirmInput, setReinstallConfirmInput] = useState('');
   const [reinstalling, setReinstalling] = useState(false);
 
-  const [consoleLines, setConsoleLines] = useState<string[]>([
-    'Connected to daemon WebSocket...',
-    'Loading server state...',
+  const [consoleLines, setConsoleLines] = useState<string[]>(() => [
+    t('console.connecting'),
+    t('console.loadingState'),
   ]);
   const consolePendingRef = useRef<string[]>([]);
   const consoleCurrentLineRef = useRef('');
@@ -249,15 +248,6 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
     setAutoScroll(isAtBottom);
   };
-
-  // Files & SFTP State
-  const [useSftpMode, setUseSftpMode] = useState(true);
-  const [sftpConnected, setSftpConnected] = useState(false);
-  const [sftpConnecting, setSftpConnecting] = useState(false);
-  const [sftpHost, setSftpHost] = useState('');
-  const [sftpPort, setSftpPort] = useState(2022);
-  const [sftpUsername, setSftpUsername] = useState('');
-  const [sftpPassword, setSftpPassword] = useState('');
 
   const clipboard = useFileClipboard();
 
@@ -506,7 +496,11 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
             for (let i = 0; i < chunk.length; i++) {
               const char = chunk[i];
               if (char === '\r') {
-                // Progress bars and package managers use CR to redraw one row.
+                if (i + 1 < chunk.length && chunk[i + 1] === '\n') {
+                  // CRLF newline sequence: do not wipe line buffer, upcoming \n will commit it.
+                  continue;
+                }
+                // Standalone CR: Progress bars and package managers use CR to redraw one row.
                 consoleCurrentLineRef.current = '';
               } else if (char === '\n') {
                 completed.push(consoleCurrentLineRef.current);
@@ -726,45 +720,29 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
         const toPath = destDir === '/' ? `/${cb.name}` : `${destDir}/${cb.name}`;
         if (fromPath === toPath) return;
 
-        if (sftpConnected) {
-          await app.RenameServerSFTPFile(identifier, fromPath, toPath);
-        } else {
-          await app.RenameFile(identifier, '/', fromPath, toPath);
-        }
+        await app.RenameFile(identifier, '/', fromPath, toPath);
         addNotification({
           type: 'success',
           title: t('serverDetail.paste'),
           message: t('serverDetail.pasteSuccess'),
         });
         clearFileClipboard();
-        loadFiles(currentDir, sftpConnected);
+        loadFiles(currentDir);
       } else {
         // copy
         const toPath = destDir === '/' ? `/${cb.name}` : `${destDir}/${cb.name}`;
         if (destDir === cb.sourceDir || toPath === cb.path) {
-          if (!sftpConnected) {
-            await app.CopyFile(identifier, cb.path.startsWith('/') ? cb.path : `/${cb.path}`);
-          } else {
-            const content = await app.ReadServerSFTPFile(identifier, cb.path);
-            const copyName = `${cb.name} copy`;
-            const copyPath = destDir === '/' ? `/${copyName}` : `${destDir}/${copyName}`;
-            await app.WriteServerSFTPFile(identifier, copyPath, content);
-          }
+          await app.CopyFile(identifier, cb.path.startsWith('/') ? cb.path : `/${cb.path}`);
         } else {
-          if (sftpConnected) {
-            const content = await app.ReadServerSFTPFile(identifier, cb.path);
-            await app.WriteServerSFTPFile(identifier, toPath, content);
-          } else {
-            const content = await app.GetFileContents(identifier, cb.path);
-            await app.WriteFile(identifier, toPath, content);
-          }
+          const content = await app.GetFileContents(identifier, cb.path);
+          await app.WriteFile(identifier, toPath, content);
         }
         addNotification({
           type: 'success',
           title: t('serverDetail.paste'),
           message: t('serverDetail.pasteSuccess'),
         });
-        loadFiles(currentDir, sftpConnected);
+        loadFiles(currentDir);
       }
     } catch (err: any) {
       addNotification({
@@ -774,35 +752,6 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
       });
     }
   };
-
-  // Pre-fill SFTP credentials from server info when loaded
-  useEffect(() => {
-    if (selectedServer) {
-      const sftpDet = selectedServer.sftp_details;
-      if (sftpDet?.ip) {
-        setSftpHost(sftpDet.ip);
-      } else if (selectedServer.node) {
-        setSftpHost(selectedServer.node);
-      }
-      if (sftpDet?.port) {
-        setSftpPort(sftpDet.port);
-      }
-      // Pterodactyl SFTP username pattern: <panel_user>.<server_short_id>
-      setSftpUsername(`${identifier}`);
-
-      // Check if already connected in Go backend
-      // @ts-ignore
-      const app = window.go?.main?.App;
-      if (app?.IsServerSFTPConnected) {
-        app.IsServerSFTPConnected(identifier).then((connected: boolean) => {
-          setSftpConnected(connected);
-          if (connected && activeTab === 'files') {
-            loadFiles(currentDir, true);
-          }
-        });
-      }
-    }
-  }, [selectedServer?.identifier]);
 
   useEffect(() => {
     if (selectedServer) {
@@ -966,7 +915,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
   const handleTabChange = async (tab: TabType) => {
     setActiveTab(tab);
     if (tab === 'files') {
-      loadFiles(currentDir, sftpConnected);
+      loadFiles(currentDir);
     } else if (tab === 'databases') {
       loadDatabases();
     } else if (tab === 'backups') {
@@ -1332,7 +1281,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     addNotification({ type: 'info', title: t('serverDetail.copied'), message: t('serverDetail.startupCopied') });
   };
 
-  const loadFiles = async (dir: string, isSftp: boolean) => {
+  const loadFiles = async (dir: string) => {
     setLoadingFiles(true);
     // @ts-ignore
     const app = window.go?.main?.App;
@@ -1342,29 +1291,16 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     }
 
     try {
-      if (isSftp) {
-        const entries = await app.ListServerSFTPFiles(identifier, dir);
-        const unified: UnifiedFile[] = (entries || []).map((e: any) => ({
-          name: e.name,
-          size: e.size,
-          mode: e.mode,
-          isDir: e.isDir,
-          modifiedTime: e.modifiedTime,
-        }));
-        setFileList(unified);
-        setCurrentDir(dir);
-      } else {
-        const files = await app.ListFiles(identifier, dir);
-        const unified: UnifiedFile[] = (files || []).map((f: any) => ({
-          name: f.name,
-          size: f.size,
-          mode: f.mode,
-          isDir: !f.is_file,
-          modifiedTime: f.modified_at,
-        }));
-        setFileList(unified);
-        setCurrentDir(dir);
-      }
+      const files = await app.ListFiles(identifier, dir);
+      const unified: UnifiedFile[] = (files || []).map((f: any) => ({
+        name: f.name,
+        size: f.size,
+        mode: f.mode,
+        isDir: !f.is_file,
+        modifiedTime: f.modified_at,
+      }));
+      setFileList(unified);
+      setCurrentDir(dir);
     } catch (err: any) {
       addNotification({
         type: 'error',
@@ -1378,57 +1314,14 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
 
   useEffect(() => {
     if (activeTab === 'files' && selectedServer) {
-      loadFiles(currentDir, sftpConnected);
+      loadFiles(currentDir);
     }
   }, [activeTab, selectedServer?.identifier]);
-
-  const handleConnectSFTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sftpHost || !sftpUsername || !sftpPassword) {
-      addNotification({ type: 'warning', title: t('serverDetail.requiredInfo'), message: t('sftpExplorer.hostRequired') });
-      return;
-    }
-
-    setSftpConnecting(true);
-    try {
-      // @ts-ignore
-      const app = window.go?.main?.App;
-      if (app) {
-        await app.ConnectServerSFTP(identifier, sftpHost, Number(sftpPort), sftpUsername, sftpPassword);
-        setSftpConnected(true);
-        addNotification({
-          type: 'success',
-          title: t('sftpExplorer.connected'),
-          message: t('serverDetail.sftpConnectedMessage', { host: sftpHost, port: sftpPort }),
-        });
-        loadFiles('/', true);
-      }
-    } catch (err: any) {
-      addNotification({
-        type: 'error',
-        title: t('serverDetail.sftpFailed'),
-        message: err.message || t('serverDetail.sftpConnectionError'),
-      });
-    } finally {
-      setSftpConnecting(false);
-    }
-  };
-
-  const handleDisconnectSFTP = async () => {
-    // @ts-ignore
-    const app = window.go?.main?.App;
-    if (app) {
-      await app.DisconnectServerSFTP(identifier);
-    }
-    setSftpConnected(false);
-    addNotification({ type: 'info', title: t('serverDetail.sftpDisconnected'), message: t('serverDetail.panelApiMode') });
-    loadFiles(currentDir, false);
-  };
 
   const handleOpenFile = async (fileName: string) => {
     const fullPath = currentDir === '/' ? `/${fileName}` : `${currentDir}/${fileName}`;
     if (editorOpenInNewTab) {
-      openFileInTab(identifier, fullPath, sftpConnected);
+      openFileInTab(identifier, fullPath);
       return;
     }
 
@@ -1437,12 +1330,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     if (!app) return;
 
     try {
-      let content = '';
-      if (sftpConnected) {
-        content = await app.ReadServerSFTPFile(identifier, fullPath);
-      } else {
-        content = await app.GetFileContents(identifier, fullPath);
-      }
+      const content = await app.GetFileContents(identifier, fullPath);
       setFileContent(content || '');
       setEditingFile(fullPath);
     } catch (err: any) {
@@ -1456,7 +1344,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     parts.pop();
     const parent = parts.length === 0 ? '/' : '/' + parts.join('/');
     setSelectedFileNames([]);
-    loadFiles(parent, sftpConnected);
+    loadFiles(parent);
   };
 
   const handleSaveFileContent = async (newContent: string) => {
@@ -1467,18 +1355,14 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     if (!app) return;
 
     try {
-      if (sftpConnected) {
-        await app.WriteServerSFTPFile(identifier, editingFile, newContent);
-      } else {
-        await app.WriteFile(identifier, editingFile, newContent);
-      }
+      await app.WriteFile(identifier, editingFile, newContent);
       setFileContent(newContent);
       addNotification({
         type: 'success',
         title: t('serverDetail.fileSaved'),
         message: t('serverDetail.fileSavedMessage', { path: editingFile }),
       });
-      loadFiles(currentDir, sftpConnected);
+      loadFiles(currentDir);
     } catch (err: any) {
       addNotification({ type: 'error', title: t('serverDetail.saveFailed'), message: err.message });
       throw err;
@@ -1495,14 +1379,10 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     if (!app) return;
 
     try {
-      if (sftpConnected) {
-        await app.DeleteServerSFTPFile(identifier, fileToDelete);
-      } else {
-        await app.DeleteFiles(identifier, currentDir, [fileToDelete]);
-      }
+      await app.DeleteFiles(identifier, currentDir, [fileToDelete]);
       addNotification({ type: 'success', title: t('serverDetail.deleted'), message: t('serverDetail.deletedMessage', { name: fileToDelete }) });
       setFileToDelete(null);
-      loadFiles(currentDir, sftpConnected);
+      loadFiles(currentDir);
     } catch (err: any) {
       addNotification({ type: 'error', title: t('serverDetail.deleteFailed'), message: err.message });
     } finally {
@@ -1521,23 +1401,15 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
 
     try {
       if (newModalType === 'folder') {
-        if (sftpConnected) {
-          await app.CreateServerSFTPFolder(identifier, path);
-        } else {
-          await app.CreateFile(identifier, currentDir, newItemName.trim());
-        }
+        await app.CreateFile(identifier, currentDir, newItemName.trim());
         addNotification({ type: 'success', title: t('serverDetail.folderCreated'), message: newItemName });
       } else {
-        if (sftpConnected) {
-          await app.WriteServerSFTPFile(identifier, path, '');
-        } else {
-          await app.WriteFile(identifier, path, '');
-        }
+        await app.WriteFile(identifier, path, '');
         addNotification({ type: 'success', title: t('serverDetail.fileCreated'), message: newItemName });
       }
       setNewModalType(null);
       setNewItemName('');
-      loadFiles(currentDir, sftpConnected);
+      loadFiles(currentDir);
     } catch (err: any) {
       addNotification({ type: 'error', title: t('serverDetail.createFailed'), message: err.message });
     }
@@ -1548,19 +1420,13 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     reader.onload = async () => {
       const result = reader.result as string;
       const base64 = result.split(',')[1] || result;
-      const targetPath = currentDir === '/' ? `/${file.name}` : `${currentDir}/${file.name}`;
-
       // @ts-ignore
       const app = window.go?.main?.App;
       if (app) {
         try {
-          if (sftpConnected) {
-            await app.UploadServerSFTPFile(identifier, targetPath, base64);
-          } else {
-            await app.UploadServerFileDirect(identifier, currentDir, file.name, base64);
-          }
+          await app.UploadServerFileDirect(identifier, currentDir, file.name, base64);
           addNotification({ type: 'success', title: t('serverDetail.uploadFinished'), message: t('serverDetail.uploadMessage', { name: file.name }) });
-          loadFiles(currentDir, sftpConnected);
+          loadFiles(currentDir);
         } catch (err: any) {
           addNotification({ type: 'error', title: t('serverDetail.uploadFailed'), message: err.message });
         }
@@ -1601,7 +1467,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
       try {
         await app.CopyFile(identifier, fullPath);
         addNotification({ type: 'success', title: t('serverDetail.duplicateSuccess'), message: t('serverDetail.duplicateMessage', { name: fileName }) });
-        loadFiles(currentDir, sftpConnected);
+        loadFiles(currentDir);
       } catch (err: any) {
         addNotification({ type: 'error', title: t('serverDetail.copyFailed'), message: err.message });
       }
@@ -1615,16 +1481,10 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     const app = window.go?.main?.App;
     if (app) {
       try {
-        if (sftpConnected) {
-          const oldP = currentDir === '/' ? `/${renameModal.oldName}` : `${currentDir}/${renameModal.oldName}`;
-          const newP = currentDir === '/' ? `/${renameModal.newName.trim()}` : `${currentDir}/${renameModal.newName.trim()}`;
-          await app.RenameServerSFTPFile(identifier, oldP, newP);
-        } else {
-          await app.RenameFile(identifier, currentDir, renameModal.oldName, renameModal.newName.trim());
-        }
+        await app.RenameFile(identifier, currentDir, renameModal.oldName, renameModal.newName.trim());
         addNotification({ type: 'success', title: t('serverDetail.renameSuccess'), message: t('serverDetail.renamedMessage', { name: renameModal.newName.trim() }) });
         setRenameModal({ isOpen: false, oldName: '', newName: '' });
-        loadFiles(currentDir, sftpConnected);
+        loadFiles(currentDir);
       } catch (err: any) {
         addNotification({ type: 'error', title: t('serverDetail.renameFailed'), message: err.message });
       }
@@ -1638,15 +1498,10 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     const app = window.go?.main?.App;
     if (app) {
       try {
-        if (sftpConnected) {
-          const p = currentDir === '/' ? `/${chmodModal.fileName}` : `${currentDir}/${chmodModal.fileName}`;
-          await app.ChmodServerSFTPFile(identifier, p, chmodModal.mode.trim());
-        } else {
-          await app.ChmodFile(identifier, currentDir, chmodModal.fileName, chmodModal.mode.trim());
-        }
+        await app.ChmodFile(identifier, currentDir, chmodModal.fileName, chmodModal.mode.trim());
         addNotification({ type: 'success', title: t('serverDetail.modePermissionsUpdated'), message: t('serverDetail.modeSet', { mode: chmodModal.mode.trim() }) });
         setChmodModal({ isOpen: false, fileName: '', mode: '0755' });
-        loadFiles(currentDir, sftpConnected);
+        loadFiles(currentDir);
       } catch (err: any) {
         addNotification({ type: 'error', title: t('serverDetail.permissionsFailed'), message: err.message });
       }
@@ -1663,7 +1518,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
         await app.CompressFiles(identifier, currentDir, targets);
         addNotification({ type: 'success', title: t('serverDetail.archiveCreated'), message: t('serverDetail.compressedItems', { count: targets.length }) });
         setSelectedFileNames([]);
-        loadFiles(currentDir, sftpConnected);
+        loadFiles(currentDir);
       } catch (err: any) {
         addNotification({ type: 'error', title: t('serverDetail.compressFailed'), message: err.message });
       }
@@ -1677,7 +1532,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
       try {
         await app.DecompressFile(identifier, currentDir, fileName);
         addNotification({ type: 'success', title: t('serverDetail.decompressed'), message: t('serverDetail.extractedFile', { name: fileName }) });
-        loadFiles(currentDir, sftpConnected);
+        loadFiles(currentDir);
       } catch (err: any) {
         addNotification({ type: 'error', title: t('serverDetail.decompressFailed'), message: err.message });
       }
@@ -1694,7 +1549,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
         await app.PullRemoteFile(identifier, currentDir, pullRemoteModal.url.trim(), pullRemoteModal.filename.trim());
         addNotification({ type: 'success', title: t('serverDetail.pullStarted'), message: t('serverDetail.pullMessage', { url: pullRemoteModal.url }) });
         setPullRemoteModal({ isOpen: false, url: '', filename: '' });
-        loadFiles(currentDir, sftpConnected);
+        loadFiles(currentDir);
       } catch (err: any) {
         addNotification({ type: 'error', title: t('serverDetail.pullFailed'), message: err.message });
       }
@@ -1708,17 +1563,10 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     const app = window.go?.main?.App;
     if (app) {
       try {
-        if (sftpConnected) {
-          for (const name of selectedFileNames) {
-            const target = currentDir === '/' ? `/${name}` : `${currentDir}/${name}`;
-            await app.DeleteServerSFTPFile(identifier, target);
-          }
-        } else {
-          await app.DeleteFiles(identifier, currentDir, selectedFileNames);
-        }
+        await app.DeleteFiles(identifier, currentDir, selectedFileNames);
         addNotification({ type: 'success', title: t('serverDetail.deleted'), message: t('serverDetail.batchDeleteMessage', { count: selectedFileNames.length }) });
         setSelectedFileNames([]);
-        loadFiles(currentDir, sftpConnected);
+        loadFiles(currentDir);
       } catch (err: any) {
         addNotification({ type: 'error', title: t('serverDetail.batchDeleteFailed'), message: err.message });
       }
@@ -2030,7 +1878,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               {/* CPU */}
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-                title={`CPU: ${cpuPercent}% / ${cpuMax > 0 ? `${cpuMax}%` : 'Không giới hạn'} (Đang dùng ${cpuCapacityPercent}% công suất tối đa)`}
+                title={t('serverDetail.cpuTooltip', { percent: cpuPercent, max: cpuMax > 0 ? `${cpuMax}%` : t('serverDetail.unlimited'), capacity: cpuCapacityPercent })}
               >
                 <Cpu size={12} color={cpuColor} />
                 <span style={{ color: cpuColor, fontWeight: 600 }}>
@@ -2045,7 +1893,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               {/* RAM */}
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-                title={`RAM: ${memoryMB} MB / ${memMax > 0 ? `${memMax} MB` : 'Không giới hạn'} (${memCapacityPercent}% tải)`}
+                title={t('serverDetail.ramTooltip', { current: memoryMB, max: memMax > 0 ? `${memMax} MB` : t('serverDetail.unlimited'), capacity: memCapacityPercent })}
               >
                 <Activity size={12} color={memColor} />
                 <span style={{ color: memColor, fontWeight: 600 }}>
@@ -2062,7 +1910,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               {/* Disk */}
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-                title={`Disk: ${diskMB} MB / ${diskMax > 0 ? `${diskMax} MB` : 'Không giới hạn'} (${diskCapacityPercent}% dung lượng)`}
+                title={t('serverDetail.diskTooltip', { current: diskMB, max: diskMax > 0 ? `${diskMax} MB` : t('serverDetail.unlimited'), capacity: diskCapacityPercent })}
               >
                 <HardDrive size={12} color={diskColor} />
                 <span style={{ color: diskColor, fontWeight: 600 }}>
@@ -2554,9 +2402,6 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 maxWidth: '100%',
                 overflowY: 'auto',
                 overflowX: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1px',
                 padding: '16px',
                 wordBreak: 'break-word',
               }}
@@ -2565,7 +2410,18 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 ? consoleLines.filter((l) => l.toLowerCase().includes(consoleSearch.toLowerCase()))
                 : consoleLines
               ).map(({ line, key }) => (
-                <ColorizedLine key={key} line={line} />
+                <div
+                  key={key}
+                  style={{
+                    minHeight: '18px',
+                    padding: '1px 0',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    flexShrink: 0,
+                  }}
+                >
+                  <ColorizedLine line={line} />
+                </div>
               ))}
               <div ref={consoleEndRef} />
             </div>
@@ -2574,7 +2430,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
               <button
                 type="button"
                 onClick={scrollToBottom}
-                title="Cuộn xuống cuối log"
+                title={t('console.scrollToBottom')}
                 className="btn-interactive"
                 style={{
                   position: 'absolute',
@@ -2633,7 +2489,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 type="submit"
                 className="btn-interactive"
                 disabled={!commandInput.trim()}
-                title="Gửi lệnh (Enter)"
+                title={t('console.sendCommand')}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -2715,7 +2571,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 <button
                   onClick={() => {
                     setSelectedFileNames([]);
-                    loadFiles('/', sftpConnected);
+                    loadFiles('/');
                   }}
                   style={{
                     background: 'none',
@@ -2737,7 +2593,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                       <button
                         onClick={() => {
                           setSelectedFileNames([]);
-                          loadFiles(subPath, sftpConnected);
+                          loadFiles(subPath);
                         }}
                         style={{
                           background: 'none',
@@ -2867,7 +2723,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 </button>
 
                 <button
-                  onClick={() => loadFiles(currentDir, sftpConnected)}
+                  onClick={() => loadFiles(currentDir)}
                   title={t('serverDetail.refreshFiles')}
                   style={{
                     padding: '5px 8px',
@@ -3085,7 +2941,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                     >
                       <FolderTree size={32} color="var(--color-primary-light)" />
                       <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text)' }}>..</span>
-                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>(Quay lại)</span>
+                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{t('serverDetail.goBack')}</span>
                     </div>
                   )}
 
@@ -3108,7 +2964,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                           onClick={() => {
                             if (f.isDir) {
                               setSelectedFileNames([]);
-                              loadFiles(filePath, sftpConnected);
+                              loadFiles(filePath);
                             } else {
                               handleOpenFile(f.name);
                             }
@@ -3318,7 +3174,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                           onClick={() => {
                             if (f.isDir) {
                               setSelectedFileNames([]);
-                              loadFiles(filePath, sftpConnected);
+                              loadFiles(filePath);
                             } else {
                               handleOpenFile(f.name);
                             }
@@ -3579,7 +3435,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                   }}
                 >
                   <RefreshCw size={13} className={loadingDbs ? 'animate-spin' : ''} />
-                  <span>{t('common.refresh') || 'Làm mới'}</span>
+                  <span>{t('common.refresh')}</span>
                 </button>
               }
             />
@@ -3626,7 +3482,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
           <div className="custom-scrollbar horizontal-scroll-container" style={{ padding: '24px', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', maxWidth: '1280px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
             <ServerSectionHeader
               icon={Network}
-              title="Network & Port Allocations"
+              title={t('serverDetail.networkAllocationsTitle')}
               subtitle={`${allocations.length} / ${server?.feature_limits?.allocations !== undefined && server.feature_limits.allocations !== null ? server.feature_limits.allocations : 'Unlimited'} allocations assigned • Control IP bindings and ports`}
               actions={
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -4145,9 +4001,9 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                     {/* Filter Pills */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       {[
-                        { key: 'all', label: 'Tất cả' },
-                        { key: 'editable', label: 'Có thể sửa' },
-                        { key: 'custom', label: 'Đã tùy chỉnh' },
+                        { key: 'all', label: t('startupTab.filterAll') },
+                        { key: 'editable', label: t('startupTab.filterEditable') },
+                        { key: 'custom', label: t('startupTab.filterCustom') },
                       ].map((tab) => (
                         <button
                           key={tab.key}
@@ -4245,7 +4101,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                           fontSize: '12px',
                         }}
                       >
-                        Không tìm thấy biến môi trường nào phù hợp với bộ lọc.
+                        {t('startupTab.noVariablesFound')}
                       </div>
                     );
                   }
@@ -4307,7 +4163,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                                         fontWeight: 600,
                                       }}
                                     >
-                                      Chưa lưu
+                                      {t('serverDetail.unsaved')}
                                     </span>
                                   )}
                                   <span
@@ -4320,7 +4176,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                                       fontWeight: 500,
                                     }}
                                   >
-                                    {v.is_editable ? 'Editable' : 'Read Only'}
+                                    {v.is_editable ? t('serverDetail.editable') : t('serverDetail.readOnly')}
                                   </span>
                                 </div>
                               </div>
@@ -4377,8 +4233,8 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                                     outline: 'none',
                                   }}
                                 >
-                                  <option value="0">0 (False / Tắt)</option>
-                                  <option value="1">1 (True / Bật)</option>
+                                  <option value="0">{t('startupTab.boolFalse')}</option>
+                                  <option value="1">{t('startupTab.boolTrue')}</option>
                                 </select>
                               ) : (
                                 <div style={{ position: 'relative' }}>
@@ -4387,7 +4243,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                                     disabled={!v.is_editable}
                                     value={draftVal}
                                     onChange={(e) => setVarDrafts((prev) => ({ ...prev, [key]: e.target.value }))}
-                                    placeholder={v.default_value || 'Chưa có giá trị'}
+                                    placeholder={v.default_value || t('startupTab.noValue')}
                                     style={{
                                       width: '100%',
                                       padding: `8px ${isSecret ? '34px' : '10px'} 8px 10px`,
@@ -4436,7 +4292,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                             >
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                                  Mặc định: <code style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>{v.default_value || '""'}</code>
+                                  {t('startupTab.defaultValue')} <code style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>{v.default_value || '""'}</code>
                                 </span>
                                 {isDifferentFromDefault && v.is_editable && (
                                   <button
@@ -4484,7 +4340,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                                     }}
                                   >
                                     {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Save size={11} />}
-                                    <span>{isSaving ? 'Đang lưu...' : 'Lưu'}</span>
+                                    <span>{isSaving ? t('serverDetail.saving') : t('serverDetail.save')}</span>
                                   </button>
                                 )}
                               </div>
@@ -4826,14 +4682,13 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
         <PteroMonacoEditor
           fileName={editingFile}
           initialValue={fileContent}
-          isSftp={sftpConnected}
           isSaving={savingFile}
           onSave={handleSaveFileContent}
           onClose={() => setEditingFile(null)}
           onOpenNewTab={() => {
             const fileToOpen = editingFile;
             setEditingFile(null);
-            openFileInTab(identifier, fileToOpen, sftpConnected);
+            openFileInTab(identifier, fileToOpen);
           }}
         />
       )}
@@ -5103,7 +4958,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                   type="url"
                   autoFocus
                   required
-                  placeholder="https://example.com/server.jar"
+                  placeholder={t('serverDetail.remoteJarPlaceholder')}
                   value={pullRemoteModal.url}
                   onChange={(e) => setPullRemoteModal((prev) => ({ ...prev, url: e.target.value }))}
                   style={{
@@ -5547,7 +5402,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                       const name = contextMenu.file!.name;
                       const fullPath = currentDir === '/' ? `/${name}` : `${currentDir}/${name}`;
                       setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-                      openFileInTab(identifier, fullPath, sftpConnected);
+                      openFileInTab(identifier, fullPath);
                     }}
                   >
                     <ExternalLink size={13} color="#60A5FA" />
@@ -5835,7 +5690,7 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
                 className="context-menu-item"
                 onClick={() => {
                   setContextMenu({ isOpen: false, x: 0, y: 0, file: null });
-                  loadFiles(currentDir, sftpConnected);
+                  loadFiles(currentDir);
                 }}
               >
                 <RefreshCw size={13} />

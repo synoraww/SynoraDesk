@@ -22,7 +22,6 @@ loader.config({ monaco });
 interface PteroMonacoEditorProps {
   fileName: string;
   initialValue: string;
-  isSftp?: boolean;
   isSaving: boolean;
   onSave: (content: string) => Promise<void> | void;
   onClose: () => void;
@@ -119,7 +118,6 @@ const SUPPORTED_LANGUAGES = [
 export const PteroMonacoEditor: React.FC<PteroMonacoEditorProps> = ({
   fileName,
   initialValue,
-  isSftp,
   isSaving,
   onSave,
   onClose,
@@ -331,21 +329,6 @@ export const PteroMonacoEditor: React.FC<PteroMonacoEditorProps> = ({
                 }}
               >
                 UNSAVED
-              </span>
-            )}
-
-            {isSftp && (
-              <span
-                style={{
-                  fontSize: '10px',
-                  padding: '1px 6px',
-                  borderRadius: '4px',
-                  backgroundColor: 'rgba(34, 197, 94, 0.15)',
-                  color: 'var(--color-success)',
-                  fontWeight: 600,
-                }}
-              >
-                SFTP
               </span>
             )}
 

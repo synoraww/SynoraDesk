@@ -1,5 +1,6 @@
 import React from 'react';
 import { Trash2, ArrowDown, Search, ExternalLink } from 'lucide-react';
+import { useI18n } from '../../i18n';
 
 // Standard 16 ANSI colors (Normal + Bright)
 const ANSI_COLORS: { [key: number]: string } = {
@@ -199,12 +200,16 @@ export const ColorizedLine = React.memo<{ line: string }>(({ line }) => {
       <div
         style={{
           fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace",
-          lineHeight: 1.38,
+          lineHeight: 1.45,
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
           overflowWrap: 'anywhere',
-          minHeight: '17px',
+          minHeight: '18px',
           letterSpacing: '0px',
+          display: 'block',
+          width: '100%',
+          boxSizing: 'border-box',
+          flexShrink: 0,
         }}
       >
         {segments.map((seg, i) => (
@@ -283,15 +288,19 @@ export const ColorizedLine = React.memo<{ line: string }>(({ line }) => {
       <div
         style={{
           fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace",
-          lineHeight: 1.38,
+          lineHeight: 1.45,
           backgroundColor: bgColor,
           padding: bgColor ? '1px 4px' : undefined,
           borderRadius: bgColor ? '3px' : undefined,
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
           overflowWrap: 'anywhere',
-          minHeight: '17px',
+          minHeight: '18px',
           letterSpacing: '0px',
+          display: 'block',
+          width: '100%',
+          boxSizing: 'border-box',
+          flexShrink: 0,
         }}
       >
         <span style={{ color: '#818CF8', fontWeight: 600 }}>{timestamp}</span>
@@ -306,7 +315,7 @@ export const ColorizedLine = React.memo<{ line: string }>(({ line }) => {
     <div
       style={{
         fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace",
-        lineHeight: 1.38,
+        lineHeight: 1.45,
         color: defaultColor,
         backgroundColor: bgColor,
         padding: bgColor ? '1px 4px' : undefined,
@@ -315,8 +324,12 @@ export const ColorizedLine = React.memo<{ line: string }>(({ line }) => {
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
         overflowWrap: 'anywhere',
-        minHeight: '17px',
+        minHeight: '18px',
         letterSpacing: '0px',
+        display: 'block',
+        width: '100%',
+        boxSizing: 'border-box',
+        flexShrink: 0,
       }}
     >
       <RenderWithLinks text={line} />
@@ -351,6 +364,8 @@ export const ConsoleToolbar: React.FC<ConsoleToolbarProps> = ({
   searchQuery,
   onSearchChange,
 }) => {
+  const { t } = useI18n();
+
   return (
     <div
       style={{
@@ -383,7 +398,7 @@ export const ConsoleToolbar: React.FC<ConsoleToolbarProps> = ({
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Lọc log..."
+          placeholder={t('console.filterPlaceholder')}
           style={{
             background: 'none',
             border: 'none',
@@ -410,7 +425,7 @@ export const ConsoleToolbar: React.FC<ConsoleToolbarProps> = ({
           type="button"
           onClick={onToggleAutoScroll}
           className="btn-interactive"
-          title={autoScroll ? 'Tự cuộn đang bật (Nhấn để tắt)' : 'Tự cuộn đang tắt (Nhấn để bật)'}
+          title={autoScroll ? t('console.autoScrollEnabled') : t('console.autoScrollDisabled')}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -432,7 +447,7 @@ export const ConsoleToolbar: React.FC<ConsoleToolbarProps> = ({
           type="button"
           onClick={onClear}
           className="btn-interactive"
-          title="Xóa trắng màn hình console"
+          title={t('console.clearConsole')}
           style={{
             display: 'inline-flex',
             alignItems: 'center',

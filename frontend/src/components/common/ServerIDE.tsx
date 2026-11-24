@@ -1076,7 +1076,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
             </button>
 
             <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
-              {consoleLines.length} dòng
+              {t('serverIDE.linesCount', { count: consoleLines.length })}
             </span>
 
             {/* Clear Log button */}
@@ -1211,7 +1211,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                   cursor: terminalCommand.trim() ? 'pointer' : 'not-allowed',
                 }}
               >
-                <Send size={10} /> Gửi
+                <Send size={10} /> {t('serverIDE.send')}
               </button>
             </form>
           </div>
@@ -1340,7 +1340,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                 }}
               >
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-primary-light)' }}>
-                  {creatingType === 'file' ? 'Tạo tệp mới:' : 'Tạo thư mục mới:'}
+                  {creatingType === 'file' ? t('serverIDE.newFilePrompt') : t('serverIDE.newFolderPrompt')}
                 </div>
                 <input
                   type="text"
@@ -1364,13 +1364,13 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                     onClick={() => setCreatingType(null)}
                     style={{ padding: '2px 6px', fontSize: '10px', backgroundColor: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', borderRadius: '3px', cursor: 'pointer' }}
                   >
-                    Hủy
+                    {t('common.cancel')}
                   </button>
                   <button
                     type="submit"
                     style={{ padding: '2px 8px', fontSize: '10px', backgroundColor: 'var(--color-primary)', border: 'none', color: '#fff', borderRadius: '3px', cursor: 'pointer', fontWeight: 600 }}
                   >
-                    Tạo
+                    {t('common.create')}
                   </button>
                 </div>
               </form>
@@ -1385,7 +1385,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
               {loadingRoot ? (
                 <div style={{ padding: '20px', textAlign: 'center', fontSize: '11px', color: 'var(--color-text-muted)' }}>
                   <RefreshCw size={16} className="animate-spin" style={{ margin: '0 auto 6px' }} />
-                  Đang tải cấu trúc tệp...
+                  {t('serverIDE.loadingFiles')}
                 </div>
               ) : fileTree.length === 0 ? (
                 <div
@@ -1522,7 +1522,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
 
               {tabs.length === 0 && (
                 <div style={{ padding: '7px 16px', fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                  Chọn tệp từ cây bên trái để mở soạn thảo.
+                  {t('serverIDE.noFileSelected')}
                 </div>
               )}
 
@@ -1545,7 +1545,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                       cursor: 'pointer',
                     }}
                   >
-                    <RotateCcw size={11} /> Hủy
+                    <RotateCcw size={11} /> {t('common.cancel')}
                   </button>
                 )}
 
@@ -1568,7 +1568,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                       cursor: activeTab.isDirty ? 'pointer' : 'default',
                     }}
                   >
-                    <Save size={11} /> {activeTab.isSaving ? 'Đang lưu...' : 'Lưu'}
+                    <Save size={11} /> {activeTab.isSaving ? t('common.saving') : t('common.save')}
                   </button>
                 )}
 
@@ -1590,7 +1590,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                   }}
                 >
                   {isLayoutLocked ? <Lock size={12} /> : <Unlock size={12} />}
-                  <span>{isLayoutLocked ? 'Đã khóa' : 'Khóa'}</span>
+                  <span>{isLayoutLocked ? t('serverIDE.locked') : t('serverIDE.lock')}</span>
                 </button>
               </div>
             </div>
@@ -1632,7 +1632,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                     Server IDE
                   </div>
                   <div style={{ fontSize: '12px', maxWidth: '340px', textAlign: 'center' }}>
-                    Kết nối trực tiếp API hệ thống tệp và bảng điều khiển container của <strong>{serverName}</strong>.
+                    {t('serverIDE.containerHeader', { serverName })}
                   </div>
                 </div>
               )}
@@ -1659,7 +1659,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                   <span>{activeTab.path}</span>
                   <span>•</span>
                   <span style={{ color: activeTab.isDirty ? '#EAB308' : '#10B981' }}>
-                    {activeTab.isDirty ? 'Chưa lưu (Ctrl+S)' : 'Đã đồng bộ'}
+                    {activeTab.isDirty ? t('serverIDE.unsavedWithShortcut') : t('serverIDE.synced')}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1894,7 +1894,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                   type="url"
                   autoFocus
                   required
-                  placeholder="https://example.com/file.zip"
+                  placeholder={t('serverIDE.remoteFilePlaceholder')}
                   value={pullModal.url}
                   onChange={(e) => setPullModal((prev) => ({ ...prev, url: e.target.value }))}
                   style={{
@@ -1923,7 +1923,7 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="plugin.jar"
+                  placeholder={t('serverIDE.pluginPlaceholder')}
                   value={pullModal.filename}
                   onChange={(e) => setPullModal((prev) => ({ ...prev, filename: e.target.value }))}
                   style={{

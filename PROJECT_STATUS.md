@@ -1,6 +1,6 @@
 # SynoraDesk (PteroDesk) Ma trận trạng thái dự án và sản phẩm bàn giao
 
-## Trạng thái dự án: ĐÃ HOÀN THÀNH, XÁC MINH & HOẠT ĐỘNG (v1.04A)
+## Trạng thái dự án: ĐÃ HOÀN THÀNH, XÁC MINH & HOẠT ĐỘNG (v1.05A)
 
 ### Bản tóm tắt
 SynoraDesk là một ứng dụng máy tính để bàn Windows gốc hoàn chỉnh, cấp sản xuất để quản lý một hoặc nhiều Bảng điều khiển Pterodactyl thông qua API REST chính thức, Wings WebSockets trực tiếp và đường hầm SSH/SFTP gốc. Được thiết kế với Go, Wails v2, React 19 và được phát triển với sự hỗ trợ của AI (Google DeepMind AntiGravity / Gemini AI).

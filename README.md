@@ -1,4 +1,4 @@
-# 🦅 SynoraDesk (PteroDesk) v1.04A
+# 🦅 SynoraDesk (PteroDesk) v1.05A
 
 <p align="center">
   <strong>Native Windows Desktop Client for Pterodactyl Game & Server Panels</strong><br>
@@ -203,7 +203,7 @@ Dự án đi kèm bộ tài liệu kỹ thuật hoàn chỉnh:
 - 📊 [**API Coverage Matrix**](API_COVERAGE.md) - Bảng theo dõi mức độ đáp ứng các endpoint API.
 - 🔄 [**Version Compatibility (1.x vs 2.x)**](API_COMPATIBILITY.md) - Quy chuẩn tương thích đa phiên bản panel.
 - 🧪 [**Testing & Mock Verification**](TESTING.md) - Hướng dẫn chạy unit tests và kiểm thử mock.
-- 📋 [**Project Status & Deliverables**](PROJECT_STATUS.md) - Ma trận nghiệm thu toàn bộ tính năng của phiên bản v1.04A.
+- 📋 [**Project Status & Deliverables**](PROJECT_STATUS.md) - Ma trận nghiệm thu toàn bộ tính năng của phiên bản v1.05A.
 - 📝 [**Changelog**](CHANGELOG.md) - Nhật ký lịch sử phát triển chi tiết qua từng phiên bản.
 
 ---

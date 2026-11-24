@@ -9,8 +9,6 @@ import { PanelManager, PanelModal } from './pages/PanelManager';
 import { NodesPage } from './pages/Nodes';
 import { ActivityLogsPage } from './pages/ActivityLogs';
 import { SettingsPage } from './pages/Settings';
-import { SFTPExplorerPage } from './pages/SFTPExplorer';
-import { DatabaseManagerPage } from './pages/DatabaseManager';
 import { FileEditorTab } from './components/common/FileEditorTab';
 import { WelcomeModal } from './components/common/WelcomeModal';
 import { MultiTabAlertBanner } from './components/common/MultiTabAlertBanner';
@@ -44,7 +42,6 @@ export function App() {
         server: urlParams.get('server') || '',
         subtab: urlParams.get('subtab') || 'ide',
         filePath: urlParams.get('file') || '',
-        isSftp: urlParams.get('sftp') === 'true',
         title: urlParams.get('title') || '',
       });
     }
@@ -282,7 +279,6 @@ export function App() {
         <FileEditorTab
           serverIdentifier={tab.serverIdentifier}
           filePath={tab.filePath}
-          isSftp={tab.isSftp}
           tabId={tab.id}
         />
       );
@@ -302,14 +298,6 @@ export function App() {
 
     if (tab.type === 'settings') {
       return <SettingsPage />;
-    }
-
-    if (tab.type === 'sftp') {
-      return <SFTPExplorerPage />;
-    }
-
-    if (tab.type === 'databases') {
-      return <DatabaseManagerPage />;
     }
 
     if (tab.type === 'eggs') {
@@ -346,10 +334,6 @@ export function App() {
         ? 'Quản lý Tài khoản & API Key'
         : detachedConfig.type === 'settings'
         ? 'Cài đặt'
-        : detachedConfig.type === 'sftp'
-        ? 'SFTP Explorer'
-        : detachedConfig.type === 'databases'
-        ? 'Quản lý Database'
         : 'SynoraDesk - Cửa sổ phụ');
 
     return (
@@ -422,7 +406,6 @@ export function App() {
             <FileEditorTab
               serverIdentifier={detachedConfig.server}
               filePath={detachedConfig.filePath}
-              isSftp={detachedConfig.isSftp}
               tabId="detached-file-editor"
             />
           ) : detachedConfig.server ? (
@@ -438,10 +421,6 @@ export function App() {
             <PanelManager onOpenModal={() => setIsPanelModalOpen(true)} />
           ) : detachedConfig.type === 'settings' ? (
             <SettingsPage />
-          ) : detachedConfig.type === 'sftp' ? (
-            <SFTPExplorerPage />
-          ) : detachedConfig.type === 'databases' ? (
-            <DatabaseManagerPage />
           ) : (
             <div style={{ padding: '24px', color: 'var(--color-text)' }}>
               Cửa sổ riêng độc lập

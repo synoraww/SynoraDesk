@@ -7,8 +7,6 @@ export type WorkspaceTabType =
   | 'file-editor'
   | 'settings'
   | 'nodes'
-  | 'databases'
-  | 'sftp'
   | 'activities'
   | 'apikeys'
   | 'eggs'
@@ -17,14 +15,13 @@ export type WorkspaceTabType =
 export interface WorkspaceTab {
   id: string;
   title: string;
-  iconType: 'folder' | 'server' | 'file' | 'settings' | 'nodes' | 'database' | 'terminal' | 'sftp' | 'code';
+  iconType: 'folder' | 'server' | 'file' | 'settings' | 'nodes' | 'database' | 'terminal' | 'code';
   type: WorkspaceTabType;
   panelId?: string; // Explicit panel session bound to this tab
   serverIdentifier?: string;
   serverName?: string;
   serverSubTab?: string;
   filePath?: string;
-  isSftp?: boolean;
   isDirty?: boolean;
 }
 
@@ -42,7 +39,7 @@ interface WorkspaceState {
   navigateCurrentTab: (updates: Partial<WorkspaceTab>) => void;
   setEditorOpenInNewTab: (enabled: boolean) => void;
   openServerTab: (identifier: string, name?: string, subTab?: string, inNewTab?: boolean) => string;
-  openFileInTab: (identifier: string, filePath: string, isSftp?: boolean, inNewTab?: boolean) => string;
+  openFileInTab: (identifier: string, filePath: string, inNewTab?: boolean) => string;
 }
 
 const getInitialEditorPreference = (): boolean => {
@@ -94,9 +91,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
             );
           }
 
-          // Case 3: Same singleton view (dashboard, settings, nodes, databases, sftp, activities, apikeys)
+          // Case 3: Same singleton view (dashboard, settings, nodes, activities, apikeys)
           if (
-            ['dashboard', 'settings', 'nodes', 'databases', 'sftp', 'activities', 'apikeys'].includes(tabInput.type)
+            ['dashboard', 'settings', 'nodes', 'activities', 'apikeys'].includes(tabInput.type)
           ) {
             return t.type === tabInput.type && (t.panelId === targetPanelId || !t.panelId || !targetPanelId);
           }
@@ -265,7 +262,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
       return get().openTab(tabData);
     },
 
-    openFileInTab: (identifier, filePath, isSftp = false, inNewTab?: boolean) => {
+    openFileInTab: (identifier, filePath, inNewTab?: boolean) => {
       const fileName = filePath.split('/').pop() || filePath;
       const openInTab = inNewTab !== undefined ? inNewTab : get().editorOpenInNewTab;
       const currentActivePanel = usePanelStore.getState().activePanel;
@@ -296,7 +293,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
         panelId: currentActivePanel?.id,
         serverIdentifier: identifier,
         filePath,
-        isSftp,
       };
 
       if (openInTab) {

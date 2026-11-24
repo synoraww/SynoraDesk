@@ -8,14 +8,12 @@ import { useI18n } from '../../i18n';
 interface FileEditorTabProps {
   serverIdentifier: string;
   filePath: string;
-  isSftp?: boolean;
   tabId: string;
 }
 
 export const FileEditorTab: React.FC<FileEditorTabProps> = ({
   serverIdentifier,
   filePath,
-  isSftp = false,
   tabId,
 }) => {
   const [content, setContent] = useState<string | null>(null);
@@ -37,12 +35,7 @@ export const FileEditorTab: React.FC<FileEditorTabProps> = ({
       }
 
       try {
-        let text = '';
-        if (isSftp) {
-          text = await app.ReadServerSFTPFile(serverIdentifier, filePath);
-        } else {
-          text = await app.GetFileContents(serverIdentifier, filePath);
-        }
+        const text = await app.GetFileContents(serverIdentifier, filePath);
         if (mounted) {
           setContent(text || '');
         }
@@ -64,7 +57,7 @@ export const FileEditorTab: React.FC<FileEditorTabProps> = ({
     return () => {
       mounted = false;
     };
-  }, [serverIdentifier, filePath, isSftp]);
+  }, [serverIdentifier, filePath]);
 
   const handleSave = async (newContent: string) => {
     setSaving(true);
@@ -76,11 +69,7 @@ export const FileEditorTab: React.FC<FileEditorTabProps> = ({
     }
 
     try {
-      if (isSftp) {
-        await app.WriteServerSFTPFile(serverIdentifier, filePath, newContent);
-      } else {
-        await app.WriteFile(serverIdentifier, filePath, newContent);
-      }
+      await app.WriteFile(serverIdentifier, filePath, newContent);
       setContent(newContent);
       updateTab(tabId, { isDirty: false });
       addNotification({
@@ -113,7 +102,6 @@ export const FileEditorTab: React.FC<FileEditorTabProps> = ({
       <PteroMonacoEditor
         fileName={filePath}
         initialValue={content}
-        isSftp={isSftp}
         isSaving={saving}
         isModal={false}
         onSave={handleSave}

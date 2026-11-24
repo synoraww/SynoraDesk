@@ -40,7 +40,7 @@ func NewHTTPClient(config ClientConfig) *HTTPClient {
 		config.MaxRetries = 3
 	}
 	if config.UserAgent == "" {
-		config.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 SynoraDesk/1.04A"
+		config.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 SynoraDesk/1.05A"
 	}
 
 	transport := &http.Transport{

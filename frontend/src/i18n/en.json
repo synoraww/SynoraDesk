@@ -52,7 +52,8 @@
     "multiTabTitle": "Duplicate Tab Detected:",
     "multiTabDesc": "SynoraDesk is currently open in another browser tab. To prevent session conflicts, please use the existing tab.",
     "useThisTab": "Use this tab",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "create": "Create"
   },
   "nav": {
     "servers": "Servers",
@@ -238,7 +239,15 @@
     "noCommand": "(Startup command not yet rendered)",
     "rawTitle": "Original Template (Raw Egg Command):",
     "rawHelp": "Tags like {{VARIABLE}} will be replaced with their respective environment variable values when the container starts.",
-    "envVariables": "Environment Variables"
+    "envVariables": "Environment Variables",
+    "filterAll": "All",
+    "filterEditable": "Editable",
+    "filterCustom": "Customized",
+    "noVariablesFound": "No environment variables match the current filter.",
+    "noValue": "No value set",
+    "defaultValue": "Default:",
+    "boolFalse": "0 (False / Disabled)",
+    "boolTrue": "1 (True / Enabled)"
   },
   "files": {
     "wordWrap": "Toggle word wrap",
@@ -322,7 +331,7 @@
     "aboutTitle": "About PteroDesk",
     "aboutDesc": "Designed for professional server administrators and game host managers.",
     "applicationDirectory": "Application directory:",
-    "version": "SynoraDesk v1.04A (Native Windows x64 Desktop Application)",
+    "version": "SynoraDesk v1.05A (Native Windows x64 Desktop Application)",
     "builtWith": "Built with Go + Wails v2 + React 19 + Meta Astryx Design System",
     "animationTitle": "Motion & Animations",
     "animationSubtitle": "Adjust between smooth animations or lightweight reduced motion",
@@ -651,7 +660,20 @@
     "copiedClipboard": "Copied to clipboard",
     "cutClipboard": "Cut to clipboard",
     "emptyDirectory": "Directory is empty",
-    "emptyAreaTip": "Right-click to create files, folders or upload"
+    "emptyAreaTip": "Right-click to create files, folders or upload",
+    "linesCount": "{count} lines",
+    "send": "Send",
+    "newFilePrompt": "Create new file:",
+    "newFolderPrompt": "Create new folder:",
+    "loadingFiles": "Loading file structure...",
+    "noFileSelected": "Select a file from the tree on the left to start editing.",
+    "locked": "Locked",
+    "lock": "Lock",
+    "containerHeader": "Direct connection to file system API and container console for {serverName}.",
+    "unsavedWithShortcut": "Unsaved (Ctrl+S)",
+    "synced": "Synced",
+    "remoteFilePlaceholder": "https://example.com/file.zip",
+    "pluginPlaceholder": "plugin.jar"
   },
   "layout": {
     "refreshData": "Refresh data",
@@ -946,7 +968,15 @@
     "emptyAreaNewFolder": "New Folder",
     "emptyAreaUpload": "Upload File",
     "emptyAreaPull": "Pull from URL",
-    "emptyAreaRefresh": "Refresh"
+    "emptyAreaRefresh": "Refresh",
+    "goBack": "(Back)",
+    "cpuTooltip": "CPU: {percent}% / {max} (Using {capacity}% maximum capacity)",
+    "ramTooltip": "RAM: {current} MB / {max} ({capacity}% load)",
+    "diskTooltip": "Disk: {current} MB / {max} ({capacity}% capacity)",
+    "networkAllocationsTitle": "Network & Port Allocations",
+    "remoteJarPlaceholder": "https://example.com/server.jar",
+    "editable": "Editable",
+    "readOnly": "Read Only"
   },
   "account": {
     "clientUser": "Client user",
@@ -1177,7 +1207,7 @@
     "upToDate": "You are running the latest version!",
     "currentVersion": "Current version",
     "newVersionAvailable": "A new version is available!",
-    "recentImprovements": "Key New Features (v1.04A)",
+    "recentImprovements": "Key New Features (v1.05A)",
     "checking": "Checking...",
     "checkAgain": "Check Again"
   },
@@ -1233,5 +1263,16 @@
     "resetConfirmDesc": "This action will permanently delete all panel profiles, configurations, local SQLite database, and DPAPI encryption keys on this machine. Are you sure you want to proceed?",
     "revisitTerms": "Review Terms & Privacy Commitment",
     "wipeDataSuccess": "All application data wiped successfully"
+  },
+  "console": {
+    "connecting": "Connected to daemon WebSocket...",
+    "loadingState": "Loading server state...",
+    "filterPlaceholder": "Filter logs...",
+    "autoScrollEnabled": "Auto-scroll is ON (Click to disable)",
+    "autoScrollDisabled": "Auto-scroll is OFF (Click to enable)",
+    "clearConsole": "Clear console screen",
+    "scrollToBottom": "Scroll to bottom",
+    "inputPlaceholder": "Enter a server console command...",
+    "sendCommand": "Send command (Enter)"
   }
 }

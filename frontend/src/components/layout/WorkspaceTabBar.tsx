@@ -30,7 +30,6 @@ export const WorkspaceTabBar: React.FC = () => {
         server: tab.serverIdentifier || '',
         subtab: tab.serverSubTab || 'ide',
         filePath: tab.filePath || '',
-        isSftp: Boolean(tab.isSftp),
         title: tab.title,
       }));
     } catch (err) {
