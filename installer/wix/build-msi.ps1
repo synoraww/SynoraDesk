@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Builds the SynoraDesk Windows Installer (.msi) package using WiX Toolset v7.
 .DESCRIPTION
@@ -32,7 +32,7 @@ if (-not $wixExe) {
     exit 1
 }
 
-Write-Host "[✓] WiX Toolset found: $wixExe" -ForegroundColor Green
+Write-Host "[+] WiX Toolset found: $wixExe" -ForegroundColor Green
 
 # Verify binary existence
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition

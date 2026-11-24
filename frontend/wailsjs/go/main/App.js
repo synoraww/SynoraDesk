@@ -18,40 +18,16 @@ export function ChmodFile(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ChmodFile'](arg1, arg2, arg3, arg4);
 }
 
-export function ChmodServerSFTPFile(arg1, arg2, arg3) {
-  return window['go']['main']['App']['ChmodServerSFTPFile'](arg1, arg2, arg3);
-}
-
 export function CloseCurrentWindow() {
   return window['go']['main']['App']['CloseCurrentWindow']();
-}
-
-export function CloseDatabase() {
-  return window['go']['main']['App']['CloseDatabase']();
-}
-
-export function CloseSFTP() {
-  return window['go']['main']['App']['CloseSFTP']();
 }
 
 export function CompressFiles(arg1, arg2, arg3) {
   return window['go']['main']['App']['CompressFiles'](arg1, arg2, arg3);
 }
 
-export function ConnectDatabase(arg1) {
-  return window['go']['main']['App']['ConnectDatabase'](arg1);
-}
-
-export function ConnectSFTP(arg1) {
-  return window['go']['main']['App']['ConnectSFTP'](arg1);
-}
-
 export function ConnectServerConsole(arg1) {
   return window['go']['main']['App']['ConnectServerConsole'](arg1);
-}
-
-export function ConnectServerSFTP(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['ConnectServerSFTP'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function CopyFile(arg1, arg2) {
@@ -80,10 +56,6 @@ export function CreateNode(arg1) {
 
 export function CreateSchedule(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['CreateSchedule'](arg1, arg2, arg3, arg4, arg5);
-}
-
-export function CreateServerSFTPFolder(arg1, arg2) {
-  return window['go']['main']['App']['CreateServerSFTPFolder'](arg1, arg2);
 }
 
 export function CreateSubuser(arg1, arg2, arg3) {
@@ -118,10 +90,6 @@ export function DeleteSchedule(arg1, arg2) {
   return window['go']['main']['App']['DeleteSchedule'](arg1, arg2);
 }
 
-export function DeleteServerSFTPFile(arg1, arg2) {
-  return window['go']['main']['App']['DeleteServerSFTPFile'](arg1, arg2);
-}
-
 export function DeleteSubuser(arg1, arg2) {
   return window['go']['main']['App']['DeleteSubuser'](arg1, arg2);
 }
@@ -134,10 +102,6 @@ export function DisconnectServerConsole() {
   return window['go']['main']['App']['DisconnectServerConsole']();
 }
 
-export function DisconnectServerSFTP(arg1) {
-  return window['go']['main']['App']['DisconnectServerSFTP'](arg1);
-}
-
 export function DownloadServerFileTo(arg1, arg2, arg3) {
   return window['go']['main']['App']['DownloadServerFileTo'](arg1, arg2, arg3);
 }
@@ -148,10 +112,6 @@ export function DownloadServerFileWithDialog(arg1, arg2, arg3) {
 
 export function EnableTwoFactor(arg1) {
   return window['go']['main']['App']['EnableTwoFactor'](arg1);
-}
-
-export function ExecuteSQL(arg1) {
-  return window['go']['main']['App']['ExecuteSQL'](arg1);
 }
 
 export function GetAPIRegistry() {
@@ -274,10 +234,6 @@ export function GetWindowState() {
   return window['go']['main']['App']['GetWindowState']();
 }
 
-export function IsServerSFTPConnected(arg1) {
-  return window['go']['main']['App']['IsServerSFTPConnected'](arg1);
-}
-
 export function IsSessionLocked() {
   return window['go']['main']['App']['IsSessionLocked']();
 }
@@ -318,24 +274,12 @@ export function ListNodes() {
   return window['go']['main']['App']['ListNodes']();
 }
 
-export function ListSFTPFiles(arg1) {
-  return window['go']['main']['App']['ListSFTPFiles'](arg1);
-}
-
-export function ListSQLTables() {
-  return window['go']['main']['App']['ListSQLTables']();
-}
-
 export function ListSchedules(arg1) {
   return window['go']['main']['App']['ListSchedules'](arg1);
 }
 
 export function ListServerAllocations(arg1) {
   return window['go']['main']['App']['ListServerAllocations'](arg1);
-}
-
-export function ListServerSFTPFiles(arg1, arg2) {
-  return window['go']['main']['App']['ListServerSFTPFiles'](arg1, arg2);
 }
 
 export function ListServers() {
@@ -366,14 +310,6 @@ export function PullRemoteFile(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['PullRemoteFile'](arg1, arg2, arg3, arg4);
 }
 
-export function ReadSFTPFile(arg1) {
-  return window['go']['main']['App']['ReadSFTPFile'](arg1);
-}
-
-export function ReadServerSFTPFile(arg1, arg2) {
-  return window['go']['main']['App']['ReadServerSFTPFile'](arg1, arg2);
-}
-
 export function RecordFailedPasscodeAttempt() {
   return window['go']['main']['App']['RecordFailedPasscodeAttempt']();
 }
@@ -400,10 +336,6 @@ export function RenameFile(arg1, arg2, arg3, arg4) {
 
 export function RenameServer(arg1, arg2, arg3) {
   return window['go']['main']['App']['RenameServer'](arg1, arg2, arg3);
-}
-
-export function RenameServerSFTPFile(arg1, arg2, arg3) {
-  return window['go']['main']['App']['RenameServerSFTPFile'](arg1, arg2, arg3);
 }
 
 export function RestartApp() {
@@ -506,22 +438,10 @@ export function UploadServerFileDirect(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UploadServerFileDirect'](arg1, arg2, arg3, arg4);
 }
 
-export function UploadServerSFTPFile(arg1, arg2, arg3) {
-  return window['go']['main']['App']['UploadServerSFTPFile'](arg1, arg2, arg3);
-}
-
 export function WipeAllData() {
   return window['go']['main']['App']['WipeAllData']();
 }
 
 export function WriteFile(arg1, arg2, arg3) {
   return window['go']['main']['App']['WriteFile'](arg1, arg2, arg3);
-}
-
-export function WriteSFTPFile(arg1, arg2) {
-  return window['go']['main']['App']['WriteSFTPFile'](arg1, arg2);
-}
-
-export function WriteServerSFTPFile(arg1, arg2, arg3) {
-  return window['go']['main']['App']['WriteServerSFTPFile'](arg1, arg2, arg3);
 }

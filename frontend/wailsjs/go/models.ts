@@ -1170,51 +1170,6 @@ export namespace database {
 
 }
 
-export namespace dbclient {
-	
-	export class DBConfig {
-	    host: string;
-	    port: number;
-	    database: string;
-	    username: string;
-	    password: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new DBConfig(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.host = source["host"];
-	        this.port = source["port"];
-	        this.database = source["database"];
-	        this.username = source["username"];
-	        this.password = source["password"];
-	    }
-	}
-	export class QueryResult {
-	    columns: string[];
-	    rows: any[][];
-	    rowsAffected: number;
-	    executionTimeMs: number;
-	    error?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new QueryResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.columns = source["columns"];
-	        this.rows = source["rows"];
-	        this.rowsAffected = source["rowsAffected"];
-	        this.executionTimeMs = source["executionTimeMs"];
-	        this.error = source["error"];
-	    }
-	}
-
-}
-
 export namespace discovery {
 	
 	export class PanelCapabilities {
@@ -1450,7 +1405,6 @@ export namespace main {
 	    server: string;
 	    subtab: string;
 	    filePath: string;
-	    isSftp: boolean;
 	    title: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1464,7 +1418,6 @@ export namespace main {
 	        this.server = source["server"];
 	        this.subtab = source["subtab"];
 	        this.filePath = source["filePath"];
-	        this.isSftp = source["isSftp"];
 	        this.title = source["title"];
 	    }
 	}
@@ -1796,70 +1749,6 @@ export namespace security {
 	        this.enable_auto_wipe = source["enable_auto_wipe"];
 	        this.wipe_attempts = source["wipe_attempts"];
 	        this.data_wiped = source["data_wiped"];
-	    }
-	}
-
-}
-
-export namespace sftp {
-	
-	export class FileEntry {
-	    name: string;
-	    size: number;
-	    mode: string;
-	    // Go type: time
-	    modifiedTime: any;
-	    isDir: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new FileEntry(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
-	        this.size = source["size"];
-	        this.mode = source["mode"];
-	        this.modifiedTime = this.convertValues(source["modifiedTime"], null);
-	        this.isDir = source["isDir"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class SFTPConfig {
-	    host: string;
-	    port: number;
-	    username: string;
-	    password: string;
-	    timeout: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new SFTPConfig(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.host = source["host"];
-	        this.port = source["port"];
-	        this.username = source["username"];
-	        this.password = source["password"];
-	        this.timeout = source["timeout"];
 	    }
 	}
 

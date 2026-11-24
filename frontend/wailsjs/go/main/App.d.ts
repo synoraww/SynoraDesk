@@ -3,8 +3,6 @@
 import {panel} from '../models';
 import {api} from '../models';
 import {main} from '../models';
-import {dbclient} from '../models';
-import {sftp} from '../models';
 import {discovery} from '../models';
 import {database} from '../models';
 import {security} from '../models';
@@ -17,23 +15,11 @@ export function CheckGitHubUpdates(arg1:boolean):Promise<main.GitHubReleaseInfo>
 
 export function ChmodFile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
-export function ChmodServerSFTPFile(arg1:string,arg2:string,arg3:string):Promise<void>;
-
 export function CloseCurrentWindow():Promise<void>;
-
-export function CloseDatabase():Promise<void>;
-
-export function CloseSFTP():Promise<void>;
 
 export function CompressFiles(arg1:string,arg2:string,arg3:Array<string>):Promise<api.FileObject>;
 
-export function ConnectDatabase(arg1:dbclient.DBConfig):Promise<void>;
-
-export function ConnectSFTP(arg1:sftp.SFTPConfig):Promise<void>;
-
 export function ConnectServerConsole(arg1:string):Promise<void>;
-
-export function ConnectServerSFTP(arg1:string,arg2:string,arg3:number,arg4:string,arg5:string):Promise<void>;
 
 export function CopyFile(arg1:string,arg2:string):Promise<void>;
 
@@ -48,8 +34,6 @@ export function CreateFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 export function CreateNode(arg1:api.CreateNodeRequest):Promise<api.Node>;
 
 export function CreateSchedule(arg1:string,arg2:string,arg3:api.CronExpression,arg4:boolean,arg5:boolean):Promise<api.Schedule>;
-
-export function CreateServerSFTPFolder(arg1:string,arg2:string):Promise<void>;
 
 export function CreateSubuser(arg1:string,arg2:string,arg3:Array<string>):Promise<api.Subuser>;
 
@@ -67,23 +51,17 @@ export function DeletePanel(arg1:string):Promise<void>;
 
 export function DeleteSchedule(arg1:string,arg2:number):Promise<void>;
 
-export function DeleteServerSFTPFile(arg1:string,arg2:string):Promise<void>;
-
 export function DeleteSubuser(arg1:string,arg2:string):Promise<void>;
 
 export function DisableTwoFactor(arg1:string):Promise<void>;
 
 export function DisconnectServerConsole():Promise<void>;
 
-export function DisconnectServerSFTP(arg1:string):Promise<void>;
-
 export function DownloadServerFileTo(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function DownloadServerFileWithDialog(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function EnableTwoFactor(arg1:string):Promise<Array<string>>;
-
-export function ExecuteSQL(arg1:string):Promise<dbclient.QueryResult>;
 
 export function GetAPIRegistry():Promise<discovery.Registry>;
 
@@ -145,8 +123,6 @@ export function GetTwoFactorDetails():Promise<api.TwoFactorDetails>;
 
 export function GetWindowState():Promise<main.WindowState>;
 
-export function IsServerSFTPConnected(arg1:string):Promise<boolean>;
-
 export function IsSessionLocked():Promise<boolean>;
 
 export function ListAccountAPIKeys():Promise<Array<api.AccountApiKey>>;
@@ -167,15 +143,9 @@ export function ListNodeAllocations(arg1:number):Promise<Array<api.NodeAllocatio
 
 export function ListNodes():Promise<Array<api.Node>>;
 
-export function ListSFTPFiles(arg1:string):Promise<Array<sftp.FileEntry>>;
-
-export function ListSQLTables():Promise<Array<string>>;
-
 export function ListSchedules(arg1:string):Promise<Array<api.Schedule>>;
 
 export function ListServerAllocations(arg1:string):Promise<Array<api.Allocation>>;
-
-export function ListServerSFTPFiles(arg1:string,arg2:string):Promise<Array<sftp.FileEntry>>;
 
 export function ListServers():Promise<Array<api.Server>>;
 
@@ -191,10 +161,6 @@ export function PingActivePanel():Promise<number>;
 
 export function PullRemoteFile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
-export function ReadSFTPFile(arg1:string):Promise<string>;
-
-export function ReadServerSFTPFile(arg1:string,arg2:string):Promise<string>;
-
 export function RecordFailedPasscodeAttempt():Promise<security.LockoutStatus>;
 
 export function RecordSuccessfulPasscodeAttempt():Promise<void>;
@@ -208,8 +174,6 @@ export function RemoveCustomBackground():Promise<void>;
 export function RenameFile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function RenameServer(arg1:string,arg2:string,arg3:string):Promise<void>;
-
-export function RenameServerSFTPFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function RestartApp():Promise<void>;
 
@@ -261,12 +225,6 @@ export function UpdateSubuser(arg1:string,arg2:string,arg3:Array<string>):Promis
 
 export function UploadServerFileDirect(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
-export function UploadServerSFTPFile(arg1:string,arg2:string,arg3:string):Promise<void>;
-
 export function WipeAllData():Promise<void>;
 
 export function WriteFile(arg1:string,arg2:string,arg3:string):Promise<void>;
-
-export function WriteSFTPFile(arg1:string,arg2:string):Promise<void>;
-
-export function WriteServerSFTPFile(arg1:string,arg2:string,arg3:string):Promise<void>;
