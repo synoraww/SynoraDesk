@@ -83,7 +83,7 @@ flowchart TD
 
 ## ✨ Tính năng Nổi bật (Key Features)
 
-### 🛡️ 1. Bảo Mật Cấp Quân Sự & Khóa Ứng Dụng (Hardware Security & Vault)
+### 🛡️ 1. Bảo Mật & Khóa Ứng Dụng (Hardware Security & Vault)
 - **Mã hóa phần cứng Windows DPAPI (`crypt32.dll`)**: Toàn bộ API token (Client & Application), mật khẩu cơ sở dữ liệu, và SSH private key được bảo vệ tại chỗ bằng hàm `CryptProtectData`. Khóa giải mã gắn liền với danh tính tài khoản Windows của người dùng; nếu sao chép file database (`pterodesk.db`) sang máy tính khác, toàn bộ dữ liệu đều không thể giải mã.
 - **Hệ thống Khóa mật mã đa dạng (Passcode Lock)**: Hỗ trợ linh hoạt **PIN 4 số, PIN 6 số, PIN 8 số** hoặc **Mật khẩu văn bản phức tạp**. Màn hình khóa kính mờ với bàn phím số ảo, hỗ trợ gõ trực tiếp từ bàn phím cơ, hiệu ứng rung lắc (shake animation) khi nhập sai.
 - **Tự động khóa thông minh (Auto-lock)**: Thiết lập tự khóa sau `1 phút`, `5 phút`, `15 phút`, `30 phút` không tương tác chuột/phím, hoặc tự khóa khi khởi động ứng dụng. Nút **Quick Lock** trên thanh tiêu đề cho phép khóa tức thì khi rời máy.
@@ -93,7 +93,7 @@ flowchart TD
 
 ---
 
-### 🎨 2. Bộ Studio Hình Nền & Đa Dạng Theme Kính Mờ (Wallpaper Studio & Theming)
+### 🎨 2. Hình Nền & Đa Dạng Theme Kính Mờ (Wallpaper Studio & Theming)
 - **Bộ chọn 5 Theme màu rực rỡ**:
   - 🔵 **Ocean Blue**: Xanh dương công nghệ chuẩn mực
   - 🟢 **Emerald Mint**: Xanh ngọc lục bảo tươi mát
@@ -112,24 +112,8 @@ flowchart TD
   - **Lưu trữ ảnh độc lập an toàn**: Ảnh được sao lưu cố định tại `%APPDATA%\PteroDesk\backgrounds\`, kèm nút bấm mở trực tiếp thư mục bằng Windows Explorer.
 - **Phong cách Kính Mờ Glassmorphism**: Toàn bộ thanh điều hướng, card máy chủ, bảng điều khiển và modal được phủ lớp kính mờ cao cấp (`backdrop-filter: blur(14px)`), thích ứng hoàn hảo cho cả **Dark Mode** và **Light Mode**.
 
----
 
-### 🪟 3. Cửa Sổ Không Viền & Tách Cửa Sổ Phụ Độc Lập (Frameless & Detached Windows)
-- **Custom Frameless Titlebar**: Loại bỏ thanh tiêu đề mặc định thô cứng của Windows. Trang bị thanh tiêu đề kính mờ native (`wails-drag`), tích hợp:
-  - Logo ứng dụng & Huy hiệu phiên bản `v1.04A`.
-  - Tên tab / máy chủ hiện tại.
-  - Nút **Quick Lock** và nút **Kiểm tra cập nhật (Check for Updates)**.
-  - Bộ 3 nút điều khiển (Thu nhỏ, Phóng to/Khôi phục, Đóng) với hiệu ứng hover màu đỏ chuẩn Windows Fluent UI.
-- **Khôi phục trạng thái cửa sổ tự động**: Tự động lưu tọa độ ($X, Y$), kích thước ($W, H$) và trạng thái toàn màn hình (Maximized) vào `%APPDATA%\PteroDesk\data\window_state.json`, khôi phục chính xác vị trí làm việc trong lần mở tiếp theo.
-- **Cửa sổ phụ độc lập (Detached Pop-out Windows)**: Cho phép "bứt" các tab Server Console, trình soạn thảo Monaco IDE, SFTP Explorer hoặc Database Client ra các cửa sổ riêng biệt với thanh điều khiển độc lập để làm việc đa màn hình.
-- **Thu phóng chuẩn Browser (Responsive Zoom Hotkeys)**:
-  - Hỗ trợ đầy đủ phím tắt: `Ctrl +`, `Ctrl -`, `Ctrl 0`, và `Ctrl + Lăn chuột`.
-  - Zoom trực tiếp lên cấp độ `document.documentElement`, triệt tiêu hoàn toàn hiện tượng vệt đen (black border) hay méo giao diện thường thấy.
-  - Huy hiệu HUD nổi góc dưới thông báo mức zoom thời gian thực và tự biến mất sau 1.5 giây.
-
----
-
-### ⚡ 4. Quản Trị Tập Trung & Vận Hành Máy Chủ (Server Operations)
+### ⚡ 3. Quản Trị Tập Trung & Vận Hành Máy Chủ (Server Operations)
 - **Multi-Panel Manager**: Kết nối không giới hạn số lượng Panel Pterodactyl độc lập. Tự động nhận diện và tải **Favicon** của website (`/public/favicons/favicon.ico`), kiểm tra kết nối (ping test) và hiển thị phiên bản live.
 - **Bảng điều khiển Wings WebSocket (Real-time Console)**:
   - Bắt sóng log máy chủ trực tiếp với độ trễ sub-second.
