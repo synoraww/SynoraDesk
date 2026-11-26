@@ -25,7 +25,7 @@
 
 ## 🌟 Giới thiệu Tổng quan (Overview)
 
-**SynoraDesk** là ứng dụng desktop native chuyên biệt trên hệ điều hành **Windows 10 / 11 (x64)**, được sinh ra nhằm mang lại giải pháp quản trị toàn diện, tốc độ cao và an toàn nhất cho các Quản trị viên hệ thống (SysAdmin), DevOps, và các nhà vận hành máy chủ máy chủ game chạy nền tảng **Pterodactyl Panel** (hỗ trợ cả nhánh `v1.x` lẫn kiến trúc thế hệ mới `v2.x`).
+**SynoraDesk** là ứng dụng desktop native chuyên biệt trên hệ điều hành **Windows 10 / 11 (x64)**, được sinh ra nhằm mang lại giải pháp quản trị toàn diện, tốc độ cao và an toàn nhất cho các Quản trị viên hệ thống (SysAdmin), DevOps, và các nhà vận hành máy chủ máy chủ game chạy nền tảng **Pterodactyl Panel** (hỗ trợ cả nhánh `v1.x` ~~ lẫn kiến trúc thế hệ mới `v2.x` ~~).
 
 Khác với các ứng dụng bọc nền web thông thường (Web Wrappers) hoặc các client Electron nặng nề ngốn hàng Gigabyte RAM và phản hồi chậm chạp:
 - **Siêu nhẹ & Tối ưu RAM**: Biên dịch thành **1 file nhị phân Go duy nhất** (`pterodesk.exe` ~35MB), chỉ tiêu thụ từ **60MB – 120MB RAM** trong quá trình vận hành nhờ engine WebView2 native.
