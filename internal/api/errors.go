@@ -7,18 +7,30 @@ import (
 
 // APIError represents a structured error from the Pterodactyl API
 type APIError struct {
-	StatusCode int      `json:"statusCode"`
-	Code       string   `json:"code"`
-	Message    string   `json:"message"`
-	Detail     string   `json:"detail"`
-	Errors     []string `json:"errors,omitempty"`
+	StatusCode     int               `json:"statusCode"`
+	Code           string            `json:"code"`
+	Message        string            `json:"message"`
+	Detail         string            `json:"detail"`
+	Errors         []string          `json:"errors,omitempty"`
+	FieldErrors    map[string]string `json:"fieldErrors,omitempty"`
+	RequestID      string            `json:"requestId,omitempty"`
+	PermissionHint string            `json:"permissionHint,omitempty"`
 }
 
 func (e *APIError) Error() string {
-	if len(e.Errors) > 0 {
-		return fmt.Sprintf("API error %d (%s): %s [%s]", e.StatusCode, e.Code, e.Message, strings.Join(e.Errors, "; "))
+	reqPart := ""
+	if e.RequestID != "" {
+		reqPart = fmt.Sprintf(" [req:%s]", e.RequestID)
 	}
-	return fmt.Sprintf("API error %d (%s): %s", e.StatusCode, e.Code, e.Message)
+	if len(e.Errors) > 0 {
+		return fmt.Sprintf("API error %d (%s)%s: %s [%s]", e.StatusCode, e.Code, reqPart, e.Message, strings.Join(e.Errors, "; "))
+	}
+	return fmt.Sprintf("API error %d (%s)%s: %s", e.StatusCode, e.Code, reqPart, e.Message)
+}
+
+// IsValidationError returns true if the error is a 422 Unprocessable Entity
+func (e *APIError) IsValidationError() bool {
+	return e.StatusCode == 422
 }
 
 // IsNotFound returns true if the error is a 404

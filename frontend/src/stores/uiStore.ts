@@ -4,6 +4,7 @@ export type ThemeMode = 'dark' | 'light';
 export type AccentTheme = 'blue' | 'green' | 'purple' | 'amber' | 'rose';
 export type WallpaperFitMode = 'cover' | 'contain' | 'custom';
 export type AnimationMode = 'full' | 'light';
+export type SidebarMode = 'client' | 'admin';
 
 export interface CustomBackgroundState {
   enabled: boolean;
@@ -59,6 +60,8 @@ interface UIState {
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
+  sidebarMode: SidebarMode;
+  setSidebarMode: (mode: SidebarMode) => void;
 
   // Notifications
   notifications: Notification[];
@@ -276,6 +279,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   sidebarCollapsed: false,
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+  sidebarMode: 'client',
+  setSidebarMode: (sidebarMode) => set({ sidebarMode }),
 
   // Notifications
   notifications: [],

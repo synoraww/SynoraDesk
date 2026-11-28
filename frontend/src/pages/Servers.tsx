@@ -29,11 +29,12 @@ export const ServersPage: React.FC<ServersPageProps> = ({
   onSelectServer,
   onOpenPanelModal,
 }) => {
-  const { activePanel } = usePanelStore();
+  const { activePanel, connectionStatus, connectionError, checkPanelPing } = usePanelStore();
   const { t } = useI18n();
   const {
     servers,
     loading,
+    error,
     searchQuery,
     setSearchQuery,
     fetchServers,
@@ -58,7 +59,7 @@ export const ServersPage: React.FC<ServersPageProps> = ({
     if (activePanel) {
       fetchServers();
     }
-  }, [activePanel?.id]);
+  }, [activePanel?.id, activePanel?.hasClientKey]);
 
   // Periodic resource fetch
   useEffect(() => {
@@ -81,6 +82,41 @@ export const ServersPage: React.FC<ServersPageProps> = ({
           action={{
             label: t('servers.openPanelManager'),
             onClick: onOpenPanelModal,
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (!activePanel.hasClientKey) {
+    return (
+      <div style={{ width: '100%', padding: '32px', maxWidth: '800px', margin: '0 auto', boxSizing: 'border-box' }}>
+        <EmptyState
+          icon={ServerIcon}
+          title="Panel chưa cấu hình Client API"
+          description={`Panel "${activePanel.name}" hiện không có Client API Key (ptlc_). Vui lòng thêm Client API Key để xem và quản lý danh sách máy chủ.`}
+          action={{
+            label: t('servers.openPanelManager'),
+            onClick: onOpenPanelModal,
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (!loading && (connectionStatus === 'disconnected' || error)) {
+    return (
+      <div style={{ width: '100%', padding: '32px', maxWidth: '800px', margin: '0 auto', boxSizing: 'border-box' }}>
+        <EmptyState
+          icon={Radio}
+          title="Không thể kết nối đến máy chủ"
+          description={error || connectionError || `Không thể kết nối tới ${activePanel.name} (${activePanel.url}).`}
+          action={{
+            label: 'Thử kết nối lại',
+            onClick: () => {
+              checkPanelPing();
+              fetchServers();
+            },
           }}
         />
       </div>

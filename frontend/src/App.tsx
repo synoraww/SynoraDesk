@@ -9,10 +9,21 @@ import { PanelManager, PanelModal } from './pages/PanelManager';
 import { NodesPage } from './pages/Nodes';
 import { ActivityLogsPage } from './pages/ActivityLogs';
 import { SettingsPage } from './pages/Settings';
+import { AdminOverview, AdminSectionKey } from './pages/admin/AdminOverview';
+import { AdminUsers } from './pages/admin/AdminUsers';
+import { AdminServers } from './pages/admin/AdminServers';
+import { AdminNodes } from './pages/admin/AdminNodes';
+import { AdminLocations } from './pages/admin/AdminLocations';
+import { AdminNests } from './pages/admin/AdminNests';
+import { AdminEggs } from './pages/admin/AdminEggs';
+import { AdminAllocations } from './pages/admin/AdminAllocations';
+import { AdminDatabases } from './pages/admin/AdminDatabases';
+import { AdminPanelSettings } from './pages/admin/AdminPanelSettings';
 import { FileEditorTab } from './components/common/FileEditorTab';
 import { WelcomeModal } from './components/common/WelcomeModal';
 import { MultiTabAlertBanner } from './components/common/MultiTabAlertBanner';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { SplashScreen } from './components/common/SplashScreen';
 import { APP_CONFIG } from './config/version';
 import { usePanelStore } from './stores/panelStore';
 import { useSecurityStore } from './stores/securityStore';
@@ -103,6 +114,15 @@ export function App() {
     (document.documentElement.style as any).zoom = `${clamped}%`;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F5') {
+        e.preventDefault();
+        if (!useSecurityStore.getState().isLocked) {
+          usePanelStore.getState().checkPanelPing();
+          usePanelStore.getState().probeAdminPermissions(true);
+          window.dispatchEvent(new CustomEvent('synora:reload'));
+        }
+        return;
+      }
       if (e.ctrlKey || e.metaKey) {
         // Zoom in: Ctrl + Equal or Ctrl + Plus or NumpadAdd
         if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd' || e.code === 'Equal') {
@@ -153,6 +173,36 @@ export function App() {
   }, []);
 
   const isLocked = useSecurityStore((s) => s.isLocked);
+  const [splashVisible, setSplashVisible] = useState(true);
+  const [splashProgress, setSplashProgress] = useState(18);
+  const [splashStatus, setSplashStatus] = useState('Khởi tạo bảo mật & kiểm tra phiên...');
+  const splashStartRef = useRef<number>(Date.now());
+
+  const finishSplash = (finalStatus: string) => {
+    const elapsed = Date.now() - splashStartRef.current;
+    const remaining = Math.max(0, 1000 - elapsed);
+    setTimeout(() => {
+      setSplashProgress(100);
+      setSplashStatus(finalStatus);
+      setTimeout(() => setSplashVisible(false), 240);
+    }, remaining);
+  };
+
+  useEffect(() => {
+    const t1 = setTimeout(() => {
+      setSplashProgress((p) => (p < 45 ? 45 : p));
+      setSplashStatus('Kiểm tra mã hóa phần cứng TPM 2.0 & DPAPI...');
+    }, 250);
+    const t2 = setTimeout(() => {
+      if (useSecurityStore.getState().isLocked) {
+        finishSplash('Sẵn sàng xác thực phiên...');
+      }
+    }, 700);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
 
   useEffect(() => {
     // Set theme and accent attributes
@@ -181,15 +231,22 @@ export function App() {
       return;
     }
 
-    fetchPanels();
-    fetchActivePanel().then(() => {
-      const panel = usePanelStore.getState().activePanel;
-      if (panel) {
-        const { tabs, updateTab } = useWorkspaceStore.getState();
-        if (tabs.length > 0 && !tabs[0].panelId) {
-          updateTab(tabs[0].id, { panelId: panel.id });
+    setSplashProgress(72);
+    setSplashStatus('Đang tải danh sách Panel & kết nối cơ sở dữ liệu...');
+
+    Promise.all([
+      fetchPanels(),
+      fetchActivePanel().then(() => {
+        const panel = usePanelStore.getState().activePanel;
+        if (panel) {
+          const { tabs, updateTab } = useWorkspaceStore.getState();
+          if (tabs.length > 0 && !tabs[0].panelId) {
+            updateTab(tabs[0].id, { panelId: panel.id });
+          }
         }
-      }
+      }),
+    ]).finally(() => {
+      finishSplash('Hoàn tất khởi động!');
     });
 
     // Start normal periodic ping loop while unlocked
@@ -215,12 +272,50 @@ export function App() {
         return 'apikeys';
       case 'settings':
         return 'settings';
+      case 'admin-overview':
+      case 'admin-users':
+      case 'admin-servers':
+      case 'admin-nodes':
+      case 'admin-locations':
+      case 'admin-nests':
+      case 'admin-eggs':
+      case 'admin-allocations':
+      case 'admin-databases':
+      case 'admin-panel-settings':
+      case 'admin-api-settings':
+        return tab.type;
       default:
         return 'dashboard';
     }
   };
 
+  const adminTitles: Record<AdminSectionKey, string> = {
+    'admin-overview': 'Admin: Overview',
+    'admin-users': 'Admin: Users',
+    'admin-servers': 'Admin: Servers',
+    'admin-nodes': 'Admin: Nodes',
+    'admin-locations': 'Admin: Locations',
+    'admin-nests': 'Admin: Nests',
+    'admin-eggs': 'Admin: Eggs',
+    'admin-allocations': 'Admin: Allocations',
+    'admin-databases': 'Admin: Databases',
+    'admin-panel-settings': 'Admin: Panel Settings',
+    'admin-api-settings': 'Admin: API Settings',
+  };
+
   const handleSidebarNavigate = (navKey: NavItemKey) => {
+    if (navKey.startsWith('admin-')) {
+      const adminKey = navKey as AdminSectionKey;
+      navigateCurrentTab({
+        title: adminTitles[adminKey] || 'Admin',
+        iconType: 'settings',
+        type: adminKey,
+        serverIdentifier: undefined,
+        filePath: undefined,
+      });
+      return;
+    }
+
     switch (navKey) {
       case 'dashboard':
         navigateCurrentTab({ title: 'pterodesk', iconType: 'folder', type: 'dashboard', serverIdentifier: undefined, filePath: undefined });
@@ -299,6 +394,119 @@ export function App() {
 
     if (tab.type === 'settings') {
       return <SettingsPage />;
+    }
+
+    if (tab.type === 'admin-overview') {
+      return (
+        <AdminOverview
+          onNavigateAdmin={(section) => handleSidebarNavigate(section)}
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
+    }
+
+    if (tab.type === 'admin-users') {
+      return (
+        <AdminUsers
+          initialUserId={tab.targetEntityId}
+          onNavigateOverview={() => handleSidebarNavigate('admin-overview')}
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
+    }
+
+    if (tab.type === 'admin-servers') {
+      return (
+        <AdminServers
+          onNavigateOverview={() => handleSidebarNavigate('admin-overview')}
+          onNavigateUser={(userId) =>
+            navigateCurrentTab({
+              title: 'Admin: Users',
+              iconType: 'settings',
+              type: 'admin-users',
+              targetEntityId: userId,
+            })
+          }
+          onNavigateNode={(nodeId) =>
+            navigateCurrentTab({
+              title: 'Admin: Nodes',
+              iconType: 'settings',
+              type: 'admin-nodes',
+              targetEntityId: nodeId,
+            })
+          }
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
+    }
+
+    if (tab.type === 'admin-api-settings') {
+      return <PanelManager onOpenModal={() => setIsPanelModalOpen(true)} />;
+    }
+
+    if (tab.type === 'admin-nodes') {
+      return (
+        <AdminNodes
+          initialNodeId={tab.targetEntityId}
+          onNavigateOverview={() => handleSidebarNavigate('admin-overview')}
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
+    }
+
+    if (tab.type === 'admin-locations') {
+      return (
+        <AdminLocations
+          onNavigateOverview={() => handleSidebarNavigate('admin-overview')}
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
+    }
+
+    if (tab.type === 'admin-nests') {
+      return (
+        <AdminNests
+          onNavigateOverview={() => handleSidebarNavigate('admin-overview')}
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
+    }
+
+    if (tab.type === 'admin-eggs') {
+      return (
+        <AdminEggs
+          onNavigateOverview={() => handleSidebarNavigate('admin-overview')}
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
+    }
+
+    if (tab.type === 'admin-allocations') {
+      return (
+        <AdminAllocations
+          onNavigateOverview={() => handleSidebarNavigate('admin-overview')}
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
+    }
+
+    if (tab.type === 'admin-databases') {
+      return (
+        <AdminDatabases
+          onNavigateOverview={() => handleSidebarNavigate('admin-overview')}
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
+    }
+
+    if (tab.type === 'admin-panel-settings') {
+      return (
+        <AdminPanelSettings
+          onNavigateOverview={() => handleSidebarNavigate('admin-overview')}
+          onNavigateApiSettings={() => handleSidebarNavigate('admin-api-settings')}
+          onOpenPanelModal={() => setIsPanelModalOpen(true)}
+        />
+      );
     }
 
     if (tab.type === 'eggs') {
@@ -439,16 +647,16 @@ export function App() {
               bottom: '24px',
               right: '24px',
               zIndex: 999999,
-              backgroundColor: 'rgba(15, 23, 42, 0.9)',
+              backgroundColor: 'var(--color-surface-elevated)',
               backdropFilter: 'blur(12px)',
               border: '1px solid var(--color-border)',
               borderRadius: '24px',
               padding: '8px 16px',
-              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px var(--color-primary-glow)',
+              boxShadow: 'var(--shadow-lg), 0 0 15px var(--color-primary-glow)',
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
-              color: '#FFFFFF',
+              color: 'var(--color-text)',
               fontSize: '13px',
               fontWeight: 600,
               userSelect: 'none',
@@ -470,6 +678,7 @@ export function App() {
 
   return (
     <>
+      <SplashScreen visible={splashVisible} progress={splashProgress} statusText={splashStatus} />
       <AppShell
         currentTab={getSidebarKey(activeTab)}
         onSelectTab={handleSidebarNavigate}
@@ -526,16 +735,16 @@ export function App() {
             bottom: '24px',
             right: '24px',
             zIndex: 999999,
-            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+            backgroundColor: 'var(--color-surface-elevated)',
             backdropFilter: 'blur(12px)',
             border: '1px solid var(--color-border)',
             borderRadius: '24px',
             padding: '8px 16px',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px var(--color-primary-glow)',
+            boxShadow: 'var(--shadow-lg), 0 0 15px var(--color-primary-glow)',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            color: '#FFFFFF',
+            color: 'var(--color-text)',
             fontSize: '13px',
             fontWeight: 600,
             userSelect: 'none',

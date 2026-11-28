@@ -26,6 +26,7 @@ func main() {
 	fileFlag := flag.String("file", "", "File path for editor")
 	titleFlag := flag.String("title", "", "Window title")
 	flag.Parse()
+	runDebugLockResetIfRequested()
 
 	app := NewApp()
 	windowTitle := "SynoraDesk"

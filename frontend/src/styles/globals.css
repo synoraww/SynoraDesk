@@ -13,6 +13,7 @@
   --color-surface: #111827;
   --color-surface-hover: #1F2937;
   --color-surface-elevated: #1A2332;
+  --color-admin-sidebar: #141a23;
   --color-border: #263244;
   --color-border-subtle: #1E293B;
 
@@ -97,6 +98,7 @@
   --color-surface: #FFFFFF;
   --color-surface-hover: #F1F5F9;
   --color-surface-elevated: #FFFFFF;
+  --color-admin-sidebar: #F1F5F9;
   --color-border: #E2E8F0;
   --color-border-subtle: #EDF2F7;
   --color-text: #0F172A;
@@ -117,6 +119,7 @@
   --color-surface: rgba(17, 24, 39, 0.72);
   --color-surface-hover: rgba(31, 41, 55, 0.78);
   --color-surface-elevated: rgba(26, 35, 50, 0.85);
+  --color-admin-sidebar: rgba(20, 26, 35, 0.78);
   --color-border: rgba(255, 255, 255, 0.10);
   --color-border-subtle: rgba(255, 255, 255, 0.06);
 }
@@ -127,6 +130,7 @@
   --color-surface: rgba(255, 255, 255, 0.78);
   --color-surface-hover: rgba(241, 245, 249, 0.84);
   --color-surface-elevated: rgba(255, 255, 255, 0.90);
+  --color-admin-sidebar: rgba(241, 245, 249, 0.86);
   --color-border: rgba(0, 0, 0, 0.10);
   --color-border-subtle: rgba(0, 0, 0, 0.06);
 }

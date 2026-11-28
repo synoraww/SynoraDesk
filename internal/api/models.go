@@ -41,6 +41,21 @@ type SingleResponse[T any] struct {
 	} `json:"meta"`
 }
 
+// PaginatedResult wraps a single page of items with pagination metadata
+type PaginatedResult[T any] struct {
+	Items      []T            `json:"items"`
+	Pagination PaginationMeta `json:"pagination"`
+}
+
+// ListOptions defines server-side pagination, filtering, sorting, and includes
+type ListOptions struct {
+	Page    int               `json:"page,omitempty"`
+	PerPage int               `json:"perPage,omitempty"`
+	Filters map[string]string `json:"filters,omitempty"`
+	Sort    string            `json:"sort,omitempty"`
+	Include []string          `json:"include,omitempty"`
+}
+
 // --- Error Response ---
 
 type APIErrorResponse struct {
@@ -48,6 +63,12 @@ type APIErrorResponse struct {
 		Code   string `json:"code"`
 		Status string `json:"status"`
 		Detail string `json:"detail"`
+		Meta   *struct {
+			Rule   string `json:"rule,omitempty"`
+			Source *struct {
+				Field string `json:"field,omitempty"`
+			} `json:"source,omitempty"`
+		} `json:"meta,omitempty"`
 	} `json:"errors"`
 }
 
@@ -176,25 +197,34 @@ type AppServer struct {
 
 // Container represents server container configuration
 type Container struct {
-	StartupCommand string            `json:"startup_command"`
-	Image          string            `json:"image"`
-	Installed      int               `json:"installed"`
-	Environment    map[string]string `json:"environment"`
+	StartupCommand string                 `json:"startup_command"`
+	Image          string                 `json:"image"`
+	Installed      int                    `json:"installed"`
+	Environment    map[string]interface{} `json:"environment"`
+}
+
+// CreateServerAllocation defines allocation selection when creating a server
+type CreateServerAllocation struct {
+	Default    int   `json:"default"`
+	Additional []int `json:"additional,omitempty"`
 }
 
 // CreateServerRequest represents a request to create a server via Application API
 type CreateServerRequest struct {
-	Name          string            `json:"name"`
-	User          int               `json:"user"`
-	Egg           int               `json:"egg"`
-	DockerImage   string            `json:"docker_image"`
-	Startup       string            `json:"startup"`
-	Environment   map[string]string `json:"environment"`
-	Limits        ServerLimits      `json:"limits"`
-	FeatureLimits FeatureLimits     `json:"feature_limits"`
-	Allocation    struct {
-		Default int `json:"default"`
-	} `json:"allocation"`
+	ExternalID        *string                `json:"external_id,omitempty"`
+	Name              string                 `json:"name"`
+	Description       string                 `json:"description,omitempty"`
+	User              int                    `json:"user"`
+	Egg               int                    `json:"egg"`
+	DockerImage       string                 `json:"docker_image"`
+	Startup           string                 `json:"startup"`
+	Environment       map[string]interface{} `json:"environment"`
+	Limits            ServerLimits           `json:"limits"`
+	FeatureLimits     FeatureLimits          `json:"feature_limits"`
+	Allocation        CreateServerAllocation `json:"allocation"`
+	OOMDisabled       bool                   `json:"oom_disabled,omitempty"`
+	StartOnCompletion bool                   `json:"start_on_completion,omitempty"`
+	SkipScripts       bool                   `json:"skip_scripts,omitempty"`
 }
 
 // UpdateServerDetailsRequest represents a request to update server details
@@ -207,10 +237,26 @@ type UpdateServerDetailsRequest struct {
 
 // UpdateServerBuildRequest represents a request to update server build config
 type UpdateServerBuildRequest struct {
-	Allocation    int           `json:"allocation"`
-	OOMDisabled   bool          `json:"oom_disabled"`
-	Limits        ServerLimits  `json:"limits"`
-	FeatureLimits FeatureLimits `json:"feature_limits"`
+	Allocation        int           `json:"allocation"`
+	OOMDisabled       bool          `json:"oom_disabled"`
+	Memory            int           `json:"memory"`
+	Swap              int           `json:"swap"`
+	Disk              int           `json:"disk"`
+	IO                int           `json:"io"`
+	CPU               int           `json:"cpu"`
+	Threads           *string       `json:"threads,omitempty"`
+	FeatureLimits     FeatureLimits `json:"feature_limits"`
+	AddAllocations    []int         `json:"add_allocations,omitempty"`
+	RemoveAllocations []int         `json:"remove_allocations,omitempty"`
+}
+
+// UpdateServerStartupRequest represents a request to update server startup configuration
+type UpdateServerStartupRequest struct {
+	Startup     string                 `json:"startup"`
+	Environment map[string]interface{} `json:"environment"`
+	Egg         int                    `json:"egg"`
+	Image       string                 `json:"image"`
+	SkipScripts bool                   `json:"skip_scripts"`
 }
 
 // --- Node Models ---
@@ -243,12 +289,14 @@ type Node struct {
 	} `json:"allocated_resources,omitempty"`
 }
 
-// CreateNodeRequest represents a request to create a node
+// CreateNodeRequest represents a request to create or update a node
 type CreateNodeRequest struct {
 	Name               string `json:"name"`
+	Description        string `json:"description,omitempty"`
 	LocationID         int    `json:"location_id"`
 	FQDN               string `json:"fqdn"`
 	Scheme             string `json:"scheme"`
+	Public             bool   `json:"public"`
 	Memory             int    `json:"memory"`
 	MemoryOverallocate int    `json:"memory_overallocate"`
 	Disk               int    `json:"disk"`
@@ -259,6 +307,32 @@ type CreateNodeRequest struct {
 	DaemonBase         string `json:"daemon_base,omitempty"`
 	BehindProxy        bool   `json:"behind_proxy"`
 	MaintenanceMode    bool   `json:"maintenance_mode"`
+}
+
+// NodeConfiguration represents the Wings daemon configuration returned by /nodes/{id}/configuration
+type NodeConfiguration struct {
+	Debug   bool   `json:"debug"`
+	UUID    string `json:"uuid"`
+	TokenID string `json:"token_id"`
+	Token   string `json:"token"`
+	API     struct {
+		Host        string `json:"host"`
+		Port        int    `json:"port"`
+		UploadLimit int    `json:"upload_limit"`
+		SSL         struct {
+			Enabled bool   `json:"enabled"`
+			Cert    string `json:"cert"`
+			Key     string `json:"key"`
+		} `json:"ssl"`
+	} `json:"api"`
+	System struct {
+		Data string `json:"data"`
+		SFTP struct {
+			BindPort int `json:"bind_port"`
+		} `json:"sftp"`
+	} `json:"system"`
+	AllowedMounts []string `json:"allowed_mounts"`
+	Remote        string   `json:"remote"`
 }
 
 // --- User Models ---
@@ -277,6 +351,30 @@ type User struct {
 	TwoFactor  bool      `json:"2fa"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// CreateUserRequest represents a request to create a panel user via Application API
+type CreateUserRequest struct {
+	Email      string  `json:"email"`
+	Username   string  `json:"username"`
+	FirstName  string  `json:"first_name"`
+	LastName   string  `json:"last_name"`
+	Password   string  `json:"password,omitempty"`
+	Language   string  `json:"language,omitempty"`
+	RootAdmin  bool    `json:"root_admin"`
+	ExternalID *string `json:"external_id,omitempty"`
+}
+
+// UpdateUserRequest represents a request to update a panel user via Application API
+type UpdateUserRequest struct {
+	Email      string  `json:"email"`
+	Username   string  `json:"username"`
+	FirstName  string  `json:"first_name"`
+	LastName   string  `json:"last_name"`
+	Password   string  `json:"password,omitempty"`
+	Language   string  `json:"language,omitempty"`
+	RootAdmin  bool    `json:"root_admin"`
+	ExternalID *string `json:"external_id,omitempty"`
 }
 
 // --- Database Models ---
@@ -318,8 +416,45 @@ type Egg struct {
 	DockerImage  string            `json:"docker_image"`
 	DockerImages map[string]string `json:"docker_images,omitempty"`
 	Startup      string            `json:"startup"`
+	Config       *EggConfig        `json:"config,omitempty"`
+	Script       *EggScript        `json:"script,omitempty"`
+	Relationships *EggRelationships `json:"relationships,omitempty"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
+}
+
+// EggConfig represents process configuration for an egg
+type EggConfig struct {
+	Files   interface{} `json:"files"`
+	Startup interface{} `json:"startup"`
+	Stop    string      `json:"stop"`
+	Logs    interface{} `json:"logs"`
+}
+
+// EggScript represents the installation script metadata for an egg (read-only)
+type EggScript struct {
+	Privileged bool    `json:"privileged"`
+	Install    string  `json:"install"`
+	Entry      string  `json:"entry"`
+	Container  string  `json:"container"`
+	Extends    *string `json:"extends"`
+}
+
+// EggVariableData wraps a single egg variable relationship item
+type EggVariableData struct {
+	Object     string      `json:"object"`
+	Attributes EggVariable `json:"attributes"`
+}
+
+// EggVariablesRelationship wraps the variables relationship list
+type EggVariablesRelationship struct {
+	Object string            `json:"object"`
+	Data   []EggVariableData `json:"data"`
+}
+
+// EggRelationships holds included egg variables
+type EggRelationships struct {
+	Variables *EggVariablesRelationship `json:"variables,omitempty"`
 }
 
 // EggVariable represents a startup variable
@@ -342,6 +477,12 @@ type Location struct {
 	Long      string    `json:"long"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CreateLocationRequest represents a request to create or update a location
+type CreateLocationRequest struct {
+	Short string `json:"short"`
+	Long  string `json:"long"`
 }
 
 // --- Backup Models ---
@@ -457,7 +598,83 @@ type NodeAllocation struct {
 // CreateAllocationRequest represents a request to create allocations on a node
 type CreateAllocationRequest struct {
 	IP    string   `json:"ip"`
+	Alias string   `json:"alias,omitempty"`
 	Ports []string `json:"ports"`
+}
+
+// --- Application API Server Databases ---
+
+// AppDatabase represents a server database from the Application API
+type AppDatabase struct {
+	ID             int                        `json:"id"`
+	Server         int                        `json:"server"`
+	Host           int                        `json:"host"`
+	Database       string                     `json:"database"`
+	Username       string                     `json:"username"`
+	Remote         string                     `json:"remote"`
+	MaxConnections int                        `json:"max_connections"`
+	CreatedAt      time.Time                  `json:"created_at"`
+	UpdatedAt      time.Time                  `json:"updated_at"`
+	Relationships  *AppDatabaseRelationships  `json:"relationships,omitempty"`
+}
+
+// AppDatabasePasswordAttributes holds a one-time database password
+type AppDatabasePasswordAttributes struct {
+	Password string `json:"password"`
+}
+
+// AppDatabasePasswordRelationship wraps the password relationship
+type AppDatabasePasswordRelationship struct {
+	Object     string                        `json:"object"`
+	Attributes AppDatabasePasswordAttributes `json:"attributes"`
+}
+
+// AppDatabaseHostAttributes holds database host details
+type AppDatabaseHostAttributes struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username"`
+	Node     int    `json:"node"`
+}
+
+// AppDatabaseHostRelationship wraps the host relationship
+type AppDatabaseHostRelationship struct {
+	Object     string                    `json:"object"`
+	Attributes AppDatabaseHostAttributes `json:"attributes"`
+}
+
+// AppDatabaseRelationships holds optional included password/host data
+type AppDatabaseRelationships struct {
+	Password *AppDatabasePasswordRelationship `json:"password,omitempty"`
+	Host     *AppDatabaseHostRelationship     `json:"host,omitempty"`
+}
+
+// CreateAppDatabaseRequest represents a request to create a database via Application API
+type CreateAppDatabaseRequest struct {
+	Database       string `json:"database"`
+	Remote         string `json:"remote"`
+	Host           int    `json:"host"`
+	MaxConnections int    `json:"max_connections,omitempty"`
+}
+
+// PermissionProbeStatus represents the verification result for an Application API resource
+type PermissionProbeStatus struct {
+	Allowed    bool   `json:"allowed"`
+	StatusCode int    `json:"statusCode"`
+	Error      string `json:"error,omitempty"`
+	Attempts   int    `json:"attempts"`
+}
+
+// NodeHealthStatus represents live reachability and latency of a Wings node
+type NodeHealthStatus struct {
+	NodeID     int    `json:"nodeId"`
+	Reachable  bool   `json:"reachable"`
+	LatencyMs  int64  `json:"latencyMs"`
+	StatusCode int    `json:"statusCode,omitempty"`
+	Error      string `json:"error,omitempty"`
+	CheckedAt  string `json:"checkedAt"`
 }
 
 // --- Account Models ---

@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,8 +63,10 @@ type App struct {
 	lockConfigType    string
 	lockConfigHash    string
 	lockConfigSalt    string
+	lockConfigEncSalt string
 	detachedMu        sync.Mutex
 	detachedCount     int
+	appStartTime      time.Time
 }
 
 // NewApp creates a new App instance
@@ -72,6 +77,7 @@ func NewApp() *App {
 // startup is called when the app starts
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.appStartTime = time.Now()
 
 	// Determine fixed app data directory (persists across renames and releases)
 	a.appDataDir = GetFixedAppDataDir()
@@ -114,9 +120,9 @@ func (a *App) startup(ctx context.Context) {
 	}
 	if err == nil {
 		if plain, err := security.Decrypt(raw); err == nil {
-			var stored struct{ Type, Salt, Hash string }
+			var stored struct{ Type, Salt, EncSalt, Hash string }
 			if json.Unmarshal(plain, &stored) == nil && stored.Hash != "" && stored.Salt != "" {
-				a.lockConfigType, a.lockConfigSalt, a.lockConfigHash = stored.Type, stored.Salt, stored.Hash
+				a.lockConfigType, a.lockConfigSalt, a.lockConfigEncSalt, a.lockConfigHash = stored.Type, stored.Salt, stored.EncSalt, stored.Hash
 				a.lockConfigEnabled, a.sessionLocked = true, true
 				if a.db != nil {
 					_ = a.db.SaveSetting("app_lock", base64.StdEncoding.EncodeToString(raw))
@@ -142,6 +148,8 @@ func (a *App) startup(ctx context.Context) {
 	}
 	logger.Logger.Info().Msg("Database initialized")
 
+	// Pre-warm TPM 2.0 KEK once during startup if available
+	_ = security.IsTPMHardwareBacked()
 	// Initialize panel manager
 	a.panelManager = panel.NewManager(a.db, a.credentials)
 	if err := a.panelManager.Initialize(); err != nil {
@@ -199,8 +207,8 @@ func (a *App) SaveWindowState(width, height, x, y int, isMaximised bool) error {
 		return err
 	}
 	path := a.getWindowStatePath()
-	_ = os.MkdirAll(filepath.Dir(path), 0755)
-	return os.WriteFile(path, data, 0644)
+	_ = os.MkdirAll(filepath.Dir(path), 0700)
+	return os.WriteFile(path, data, 0600)
 }
 
 // GetWindowState returns the saved window state
@@ -332,6 +340,73 @@ func (a *App) wipeAllData() error {
 
 // --- In-Memory Session Lock Guard Bindings ---
 
+type decryptedPanelKeys struct {
+	record database.PanelRecord
+	client string
+	app    string
+}
+
+func (a *App) snapshotPanelKeys() ([]decryptedPanelKeys, error) {
+	if a.db == nil || a.credentials == nil {
+		return nil, nil
+	}
+	panels, err := a.db.GetAllPanels()
+	if err != nil {
+		return nil, err
+	}
+	res := make([]decryptedPanelKeys, 0, len(panels))
+	for _, p := range panels {
+		var clientPlain, appPlain string
+		if p.ClientAPIKey != "" {
+			clientPlain, err = a.credentials.DecryptString(p.ClientAPIKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decrypt client API key for panel %s: %w", p.Name, err)
+			}
+		}
+		if p.AppAPIKey != "" {
+			appPlain, err = a.credentials.DecryptString(p.AppAPIKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decrypt app API key for panel %s: %w", p.Name, err)
+			}
+		}
+		res = append(res, decryptedPanelKeys{
+			record: p,
+			client: clientPlain,
+			app:    appPlain,
+		})
+	}
+	return res, nil
+}
+
+func (a *App) commitPanelKeys(snaps []decryptedPanelKeys) error {
+	if a.db == nil || a.credentials == nil {
+		return nil
+	}
+	for _, s := range snaps {
+		if s.client != "" {
+			enc, err := a.credentials.EncryptString(s.client)
+			if err != nil {
+				return fmt.Errorf("failed to re-encrypt client API key for panel %s: %w", s.record.Name, err)
+			}
+			s.record.ClientAPIKey = enc
+		}
+		if s.app != "" {
+			enc, err := a.credentials.EncryptString(s.app)
+			if err != nil {
+				return fmt.Errorf("failed to re-encrypt app API key for panel %s: %w", s.record.Name, err)
+			}
+			s.record.AppAPIKey = enc
+		}
+		if err := a.db.SavePanel(s.record); err != nil {
+			return err
+		}
+	}
+	if a.panelManager != nil {
+		return a.panelManager.Initialize()
+	}
+	return nil
+}
+
 // SetLockConfig updates the session lock configuration
 func (a *App) SetLockConfig(enabled bool, lockType string, passcode string, currentPasscode string) error {
 	a.sessionMu.Lock()
@@ -349,6 +424,15 @@ func (a *App) SetLockConfig(enabled bool, lockType string, passcode string, curr
 			}
 			return fmt.Errorf("authentication required: invalid current passcode")
 		}
+		if !security.IsPasscodeKeyActive() && a.lockConfigEncSalt != "" {
+			if encSalt, err := hex.DecodeString(a.lockConfigEncSalt); err == nil && len(encSalt) > 0 {
+				security.SetPasscodeKey(security.DerivePasscodeKey(currentPasscode, encSalt))
+			}
+		}
+	}
+	snaps, err := a.snapshotPanelKeys()
+	if err != nil {
+		return err
 	}
 	path := filepath.Join(a.appDataDir, "data", "app_lock.dat")
 	marker := filepath.Join(a.appDataDir, "data", "app_lock_enabled")
@@ -363,8 +447,13 @@ func (a *App) SetLockConfig(enabled bool, lockType string, passcode string, curr
 			_ = a.db.SaveSetting("app_lock", "")
 			_ = a.db.SaveSetting("app_lock_type", "")
 		}
+		security.ClearPasscodeKey()
+		security.ClearDebugPasscodeKey()
+		if err := a.commitPanelKeys(snaps); err != nil {
+			return err
+		}
 		a.lockConfigEnabled, a.sessionLocked = false, false
-		a.lockConfigHash, a.lockConfigSalt, a.lockConfigType = "", "", "none"
+		a.lockConfigHash, a.lockConfigSalt, a.lockConfigEncSalt, a.lockConfigType = "", "", "", "none"
 		return nil
 	}
 	if lockType != "pin4" && lockType != "pin6" && lockType != "pin8" && lockType != "password" {
@@ -377,12 +466,22 @@ func (a *App) SetLockConfig(enabled bool, lockType string, passcode string, curr
 	if _, err := rand.Read(salt); err != nil {
 		return err
 	}
+	encSalt := make([]byte, 16)
+	if _, err := rand.Read(encSalt); err != nil {
+		return err
+	}
 	hash := argon2.IDKey([]byte(passcode), salt, 3, 64*1024, 4, 32)
-	stored, err := json.Marshal(struct{ Type, Salt, Hash string }{lockType, hex.EncodeToString(salt), hex.EncodeToString(hash)})
+	stored, err := json.Marshal(struct{ Type, Salt, EncSalt, Hash string }{
+		Type:    lockType,
+		Salt:    hex.EncodeToString(salt),
+		EncSalt: hex.EncodeToString(encSalt),
+		Hash:    hex.EncodeToString(hash),
+	})
 	if err != nil {
 		return err
 	}
-	encrypted, err := security.Encrypt(stored)
+	// app_lock.dat must remain decryptable at boot before passcode entry (DPAPI/TPM only).
+	encrypted, err := security.EncryptSystem(stored)
 	if err != nil {
 		return err
 	}
@@ -400,7 +499,11 @@ func (a *App) SetLockConfig(enabled bool, lockType string, passcode string, curr
 		_ = a.db.SaveSetting("app_lock_type", lockType)
 		_ = a.db.SaveSetting("security_lock_on_launch", "true")
 	}
-	a.lockConfigType, a.lockConfigSalt, a.lockConfigHash = lockType, hex.EncodeToString(salt), hex.EncodeToString(hash)
+	security.SetPasscodeKey(security.DerivePasscodeKey(passcode, encSalt))
+	if err := a.commitPanelKeys(snaps); err != nil {
+		return err
+	}
+	a.lockConfigType, a.lockConfigSalt, a.lockConfigEncSalt, a.lockConfigHash = lockType, hex.EncodeToString(salt), hex.EncodeToString(encSalt), hex.EncodeToString(hash)
 	a.lockConfigEnabled, a.sessionLocked = true, false
 	return nil
 }
@@ -432,6 +535,7 @@ func (a *App) LockSession() {
 	a.sessionMu.Lock()
 	defer a.sessionMu.Unlock()
 	a.sessionLocked = true
+	security.ClearPasscodeKey()
 }
 
 // IsSessionLocked returns whether session lock is active and locked
@@ -460,6 +564,17 @@ func (a *App) UnlockSession(passcode string) (bool, error) {
 	}
 
 	if a.verifyPasscode(passcode) {
+		if a.lockConfigEncSalt != "" {
+			if encSalt, err := hex.DecodeString(a.lockConfigEncSalt); err == nil && len(encSalt) > 0 {
+				security.SetPasscodeKey(security.DerivePasscodeKey(passcode, encSalt))
+			}
+			if a.panelManager != nil {
+				_ = a.panelManager.Initialize()
+			}
+		} else {
+			// Silent upgrade migration from pre-SDPASS1 versions (app_lock.dat lacked EncSalt).
+			a.migrateLegacyLockOnUnlock(passcode)
+		}
 		a.sessionLocked = false
 		if a.lockoutManager != nil {
 			_ = a.lockoutManager.RecordSuccess()
@@ -471,6 +586,48 @@ func (a *App) UnlockSession(passcode string) (bool, error) {
 		_, _ = a.lockoutManager.RecordFailedAttempt()
 	}
 	return false, fmt.Errorf("invalid passcode")
+}
+
+// migrateLegacyLockOnUnlock silently upgrades a pre-SDPASS1 app_lock.dat (without EncSalt)
+// and re-encrypts panel credentials under the passcode-derived AES-256-GCM key.
+func (a *App) migrateLegacyLockOnUnlock(passcode string) {
+	snaps, err := a.snapshotPanelKeys()
+	if err != nil {
+		logger.Logger.Warn().Err(err).Msg("Legacy lock migration: failed to snapshot panel keys")
+		return
+	}
+	encSalt := make([]byte, 16)
+	if _, err := rand.Read(encSalt); err != nil {
+		return
+	}
+	encSaltHex := hex.EncodeToString(encSalt)
+	stored, err := json.Marshal(struct{ Type, Salt, EncSalt, Hash string }{
+		Type:    a.lockConfigType,
+		Salt:    a.lockConfigSalt,
+		EncSalt: encSaltHex,
+		Hash:    a.lockConfigHash,
+	})
+	if err != nil {
+		return
+	}
+	encrypted, err := security.EncryptSystem(stored)
+	if err != nil {
+		return
+	}
+	path := filepath.Join(a.appDataDir, "data", "app_lock.dat")
+	if err := os.WriteFile(path, encrypted, 0600); err != nil {
+		return
+	}
+	if a.db != nil {
+		_ = a.db.SaveSetting("app_lock", base64.StdEncoding.EncodeToString(encrypted))
+	}
+	a.lockConfigEncSalt = encSaltHex
+	security.SetPasscodeKey(security.DerivePasscodeKey(passcode, encSalt))
+	if err := a.commitPanelKeys(snaps); err != nil {
+		logger.Logger.Warn().Err(err).Msg("Legacy lock migration: failed to re-encrypt panel keys")
+	} else {
+		logger.Logger.Info().Msg("Silently migrated legacy App Lock credentials to SDPASS1")
+	}
 }
 
 // SecurityPreferences holds session lock preferences persisted in database
@@ -500,6 +657,9 @@ func (a *App) GetSecurityPreferences() SecurityPreferences {
 
 // SetSecurityPreferences persists security preferences to database
 func (a *App) SetSecurityPreferences(prefs SecurityPreferences) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
 	if a.db != nil {
 		_ = a.db.SaveSetting("security_autolock_minutes", strconv.Itoa(prefs.AutoLockMinutes))
 		_ = a.db.SaveSetting("security_lock_on_launch", strconv.FormatBool(prefs.LockOnLaunch))
@@ -520,6 +680,7 @@ func (a *App) checkSessionLock() error {
 // shutdown is called when the app is closing
 func (a *App) shutdown(ctx context.Context) {
 	logger.Logger.Info().Msg("SynoraDesk shutting down")
+	security.ClearPasscodeKey()
 	if a.lockoutManager != nil {
 		a.lockoutManager.Close()
 	}
@@ -542,6 +703,9 @@ func (a *App) GetPanels() ([]panel.Panel, error) {
 	if err := a.checkSessionLock(); err != nil {
 		return nil, err
 	}
+	if a.panelManager == nil {
+		return []panel.Panel{}, nil
+	}
 	return a.panelManager.GetAllPanels()
 }
 
@@ -549,6 +713,9 @@ func (a *App) GetPanels() ([]panel.Panel, error) {
 func (a *App) GetActivePanel() (*panel.Panel, error) {
 	if err := a.checkSessionLock(); err != nil {
 		return nil, err
+	}
+	if a.panelManager == nil {
+		return nil, nil
 	}
 	return a.panelManager.GetActivePanel()
 }
@@ -570,7 +737,9 @@ func (a *App) GetCurrentAccount() (*api.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.GetAccount(a.ctx)
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+	return client.GetAccount(ctx)
 }
 
 // GetPanelAccount returns the authenticated user account for a specific panel
@@ -582,7 +751,9 @@ func (a *App) GetPanelAccount(panelID string) (*api.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.GetAccount(a.ctx)
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+	return client.GetAccount(ctx)
 }
 
 // UpdateAccountEmail updates the email for the active account
@@ -1120,6 +1291,246 @@ func (a *App) UploadServerFileDirect(identifier, directory, filename, base64Cont
 	return client.UploadFileDirect(a.ctx, identifier, directory, filename, data)
 }
 
+// --- User Bindings (Application API) ---
+
+// AdminListUsers lists panel users with server-side pagination and filters
+func (a *App) AdminListUsers(opts api.ListOptions) (*api.PaginatedResult[api.User], error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.ListUsersPage(a.ctx, opts)
+}
+
+// AdminGetUser retrieves a single panel user by ID
+func (a *App) AdminGetUser(id int) (*api.User, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.GetUser(a.ctx, id)
+}
+
+// AdminCreateUser creates a new panel user
+func (a *App) AdminCreateUser(req api.CreateUserRequest) (*api.User, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	user, err := appAPI.CreateUser(a.ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.user.create", "success", fmt.Sprintf("user:%s", user.Username))
+	return user, nil
+}
+
+// AdminUpdateUser updates an existing panel user
+func (a *App) AdminUpdateUser(id int, req api.UpdateUserRequest) (*api.User, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	user, err := appAPI.UpdateUser(a.ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.user.update", "success", fmt.Sprintf("user:%d", id))
+	return user, nil
+}
+
+// AdminDeleteUser deletes a panel user
+func (a *App) AdminDeleteUser(id int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	if err := appAPI.DeleteUser(a.ctx, id); err != nil {
+		return err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.user.delete", "success", fmt.Sprintf("user:%d", id))
+	return nil
+}
+
+// --- Server Bindings (Application API) ---
+
+// AdminListServers lists servers with server-side pagination and filters
+func (a *App) AdminListServers(opts api.ListOptions) (*api.PaginatedResult[api.AppServer], error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.ListServersPage(a.ctx, opts)
+}
+
+// AdminGetServer retrieves a server by internal ID
+func (a *App) AdminGetServer(id int) (*api.AppServer, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.GetServer(a.ctx, id)
+}
+
+// AdminCreateServer provisions a new server
+func (a *App) AdminCreateServer(req api.CreateServerRequest) (*api.AppServer, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	srv, err := appAPI.CreateServer(a.ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), srv.Identifier, srv.Name, "admin.server.create", "success", fmt.Sprintf("server:%d", srv.ID))
+	return srv, nil
+}
+
+// AdminUpdateServerDetails updates server details
+func (a *App) AdminUpdateServerDetails(id int, req api.UpdateServerDetailsRequest) (*api.AppServer, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	srv, err := appAPI.UpdateServerDetails(a.ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), srv.Identifier, srv.Name, "admin.server.update_details", "success", fmt.Sprintf("server:%d", id))
+	return srv, nil
+}
+
+// AdminUpdateServerBuild updates server build & resource limits
+func (a *App) AdminUpdateServerBuild(id int, req api.UpdateServerBuildRequest) (*api.AppServer, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	srv, err := appAPI.UpdateServerBuild(a.ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), srv.Identifier, srv.Name, "admin.server.update_build", "success", fmt.Sprintf("server:%d", id))
+	return srv, nil
+}
+
+// AdminUpdateServerStartup updates server startup configuration
+func (a *App) AdminUpdateServerStartup(id int, req api.UpdateServerStartupRequest) (*api.AppServer, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	srv, err := appAPI.UpdateServerStartup(a.ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), srv.Identifier, srv.Name, "admin.server.update_startup", "success", fmt.Sprintf("server:%d", id))
+	return srv, nil
+}
+
+// AdminSuspendServer suspends a server
+func (a *App) AdminSuspendServer(id int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	if err := appAPI.SuspendServer(a.ctx, id); err != nil {
+		return err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.server.suspend", "success", fmt.Sprintf("server:%d", id))
+	return nil
+}
+
+// AdminUnsuspendServer unsuspends a server
+func (a *App) AdminUnsuspendServer(id int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	if err := appAPI.UnsuspendServer(a.ctx, id); err != nil {
+		return err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.server.unsuspend", "success", fmt.Sprintf("server:%d", id))
+	return nil
+}
+
+// AdminReinstallServer triggers server reinstallation
+func (a *App) AdminReinstallServer(id int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	if err := appAPI.ReinstallServer(a.ctx, id); err != nil {
+		return err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.server.reinstall", "success", fmt.Sprintf("server:%d", id))
+	return nil
+}
+
+// AdminDeleteServer deletes or force-deletes a server
+func (a *App) AdminDeleteServer(id int, force bool) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	var errDel error
+	if force {
+		errDel = appAPI.ForceDeleteServer(a.ctx, id)
+	} else {
+		errDel = appAPI.DeleteServer(a.ctx, id)
+	}
+	if errDel != nil {
+		return errDel
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.server.delete", "success", fmt.Sprintf("server:%d,force:%v", id, force))
+	return nil
+}
+
 // --- Node Bindings (Application API) ---
 
 // ListNodes lists all nodes
@@ -1134,6 +1545,18 @@ func (a *App) ListNodes() ([]api.Node, error) {
 	return appAPI.ListNodes(a.ctx)
 }
 
+// AdminListNodes lists nodes with server-side pagination and filters
+func (a *App) AdminListNodes(opts api.ListOptions) (*api.PaginatedResult[api.Node], error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.ListNodesPage(a.ctx, opts)
+}
+
 // GetNode retrieves a node
 func (a *App) GetNode(id int) (*api.Node, error) {
 	if err := a.checkSessionLock(); err != nil {
@@ -1144,6 +1567,18 @@ func (a *App) GetNode(id int) (*api.Node, error) {
 		return nil, err
 	}
 	return appAPI.GetNode(a.ctx, id)
+}
+
+// AdminGetNodeConfiguration retrieves the Wings daemon configuration for a node
+func (a *App) AdminGetNodeConfiguration(id int) (*api.NodeConfiguration, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.GetNodeConfiguration(a.ctx, id)
 }
 
 // CreateNode creates a new node
@@ -1163,6 +1598,23 @@ func (a *App) CreateNode(req api.CreateNodeRequest) (*api.Node, error) {
 	return node, nil
 }
 
+// AdminUpdateNode updates an existing node
+func (a *App) AdminUpdateNode(id int, req api.CreateNodeRequest) (*api.Node, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	node, err := appAPI.UpdateNode(a.ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "node.update", "success", fmt.Sprintf("node:%d", id))
+	return node, nil
+}
+
 // DeleteNode deletes a node
 func (a *App) DeleteNode(id int) error {
 	if err := a.checkSessionLock(); err != nil {
@@ -1176,6 +1628,82 @@ func (a *App) DeleteNode(id int) error {
 		return err
 	}
 	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "node.delete", "success", "")
+	return nil
+}
+
+// --- Location Bindings (Application API) ---
+
+// AdminListLocations lists locations with server-side pagination and filters
+func (a *App) AdminListLocations(opts api.ListOptions) (*api.PaginatedResult[api.Location], error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.ListLocationsPage(a.ctx, opts)
+}
+
+// AdminGetLocation retrieves a location by ID
+func (a *App) AdminGetLocation(id int) (*api.Location, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.GetLocation(a.ctx, id)
+}
+
+// AdminCreateLocation creates a new location
+func (a *App) AdminCreateLocation(req api.CreateLocationRequest) (*api.Location, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	loc, err := appAPI.CreateLocation(a.ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.location.create", "success", fmt.Sprintf("location:%s", loc.Short))
+	return loc, nil
+}
+
+// AdminUpdateLocation updates an existing location
+func (a *App) AdminUpdateLocation(id int, req api.CreateLocationRequest) (*api.Location, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	loc, err := appAPI.UpdateLocation(a.ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.location.update", "success", fmt.Sprintf("location:%d", id))
+	return loc, nil
+}
+
+// AdminDeleteLocation deletes a location
+func (a *App) AdminDeleteLocation(id int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	if err := appAPI.DeleteLocation(a.ctx, id); err != nil {
+		return err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.location.delete", "success", fmt.Sprintf("location:%d", id))
 	return nil
 }
 
@@ -1193,6 +1721,18 @@ func (a *App) ListNests() ([]api.Nest, error) {
 	return appAPI.ListNests(a.ctx)
 }
 
+// AdminListNests lists nests with server-side pagination
+func (a *App) AdminListNests(opts api.ListOptions) (*api.PaginatedResult[api.Nest], error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.ListNestsPage(a.ctx, opts)
+}
+
 // ListEggs lists eggs for a nest
 func (a *App) ListEggs(nestID int) ([]api.Egg, error) {
 	if err := a.checkSessionLock(); err != nil {
@@ -1203,6 +1743,30 @@ func (a *App) ListEggs(nestID int) ([]api.Egg, error) {
 		return nil, err
 	}
 	return appAPI.ListEggs(a.ctx, nestID)
+}
+
+// AdminListEggs lists eggs for a nest with pagination
+func (a *App) AdminListEggs(nestID int, opts api.ListOptions) (*api.PaginatedResult[api.Egg], error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.ListEggsPage(a.ctx, nestID, opts)
+}
+
+// AdminGetEgg retrieves an egg with variables, config, and script
+func (a *App) AdminGetEgg(nestID, eggID int) (*api.Egg, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.GetEgg(a.ctx, nestID, eggID)
 }
 
 // --- Database Bindings ---
@@ -1233,6 +1797,170 @@ func (a *App) ListNodeAllocations(nodeID int) ([]api.NodeAllocation, error) {
 	return appAPI.ListNodeAllocations(a.ctx, nodeID)
 }
 
+// AdminListNodeAllocations lists allocations for a node with server-side pagination
+func (a *App) AdminListNodeAllocations(nodeID int, opts api.ListOptions) (*api.PaginatedResult[api.NodeAllocation], error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.ListNodeAllocationsPage(a.ctx, nodeID, opts)
+}
+
+// AdminCreateNodeAllocations creates allocations on a node
+func (a *App) AdminCreateNodeAllocations(nodeID int, req api.CreateAllocationRequest) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	if err := appAPI.CreateNodeAllocations(a.ctx, nodeID, req); err != nil {
+		return err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.allocation.create", "success", fmt.Sprintf("node:%d", nodeID))
+	return nil
+}
+
+// AdminDeleteNodeAllocation deletes an allocation from a node
+func (a *App) AdminDeleteNodeAllocation(nodeID, allocationID int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	if err := appAPI.DeleteNodeAllocation(a.ctx, nodeID, allocationID); err != nil {
+		return err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.allocation.delete", "success", fmt.Sprintf("node:%d,alloc:%d", nodeID, allocationID))
+	return nil
+}
+
+// --- Application API Server Database Bindings ---
+
+// AdminListServerDatabases lists databases for a server via Application API
+func (a *App) AdminListServerDatabases(serverID int, opts api.ListOptions) (*api.PaginatedResult[api.AppDatabase], error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.ListServerDatabases(a.ctx, serverID, opts)
+}
+
+// AdminGetServerDatabase retrieves a database (optionally with password)
+func (a *App) AdminGetServerDatabase(serverID, databaseID int, includePassword bool) (*api.AppDatabase, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.GetServerDatabase(a.ctx, serverID, databaseID, includePassword)
+}
+
+// AdminCreateServerDatabase creates a database for a server via Application API
+func (a *App) AdminCreateServerDatabase(serverID int, req api.CreateAppDatabaseRequest) (*api.AppDatabase, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	db, err := appAPI.CreateServerDatabase(a.ctx, serverID, req)
+	if err != nil {
+		return nil, err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.database.create", "success", fmt.Sprintf("server:%d,db:%s", serverID, db.Database))
+	return db, nil
+}
+
+// AdminResetServerDatabasePassword rotates a database password
+func (a *App) AdminResetServerDatabasePassword(serverID, databaseID int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	if err := appAPI.ResetServerDatabasePassword(a.ctx, serverID, databaseID); err != nil {
+		return err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.database.reset_password", "success", fmt.Sprintf("server:%d,db:%d", serverID, databaseID))
+	return nil
+}
+
+// AdminDeleteServerDatabase deletes a server database
+func (a *App) AdminDeleteServerDatabase(serverID, databaseID int) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return err
+	}
+	if err := appAPI.DeleteServerDatabase(a.ctx, serverID, databaseID); err != nil {
+		return err
+	}
+	a.logActivity(a.panelManager.GetActivePanelID(), "", "", "admin.database.delete", "success", fmt.Sprintf("server:%d,db:%d", serverID, databaseID))
+	return nil
+}
+
+// AdminProbePermissions checks Application API permissions across all admin modules (up to 3 retries)
+func (a *App) AdminProbePermissions() (map[string]api.PermissionProbeStatus, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	return appAPI.ProbePermissions(a.ctx), nil
+}
+
+// AdminCheckNodeHealth pings a single Wings node and returns reachability + latency in ms
+func (a *App) AdminCheckNodeHealth(nodeID int) (*api.NodeHealthStatus, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	node, err := appAPI.GetNode(a.ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	st := api.CheckNodeHealth(a.ctx, *node, nil)
+	return &st, nil
+}
+
+// AdminCheckNodesHealth pings all nodes (or first page) concurrently and returns health + latency ms
+func (a *App) AdminCheckNodesHealth() (map[int]api.NodeHealthStatus, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	appAPI, err := a.panelManager.GetAppAPI()
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := appAPI.ListNodes(a.ctx)
+	if err != nil {
+		return nil, err
+	}
+	return api.CheckNodesHealth(a.ctx, nodes, nil), nil
+}
+
 // --- Settings & Custom Background ---
 
 // CustomBackgroundInfo holds custom wallpaper configuration
@@ -1250,6 +1978,9 @@ type CustomBackgroundInfo struct {
 
 // GetAppDataDir returns the application data directory
 func (a *App) GetAppDataDir() string {
+	if err := a.checkSessionLock(); err != nil {
+		return ""
+	}
 	return a.appDataDir
 }
 
@@ -1439,7 +2170,36 @@ func (a *App) GetCustomBackground() (*CustomBackgroundInfo, error) {
 		}, nil
 	}
 
-	bytes, err := os.ReadFile(path)
+	bgDir := filepath.Clean(a.getBackgroundDir())
+	cleanPath := filepath.Clean(path)
+	if !strings.HasPrefix(strings.ToLower(cleanPath), strings.ToLower(bgDir+string(os.PathSeparator))) {
+		return &CustomBackgroundInfo{
+			Enabled:   false,
+			Path:      "",
+			DataURL:   "",
+			Opacity:   opacity,
+			Blur:      blur,
+			Scale:     scale,
+			PositionX: posX,
+			PositionY: posY,
+			FitMode:   fitMode,
+		}, nil
+	}
+	if info, lerr := os.Lstat(cleanPath); lerr != nil || info.Mode()&os.ModeSymlink != 0 || info.IsDir() {
+		return &CustomBackgroundInfo{
+			Enabled:   false,
+			Path:      "",
+			DataURL:   "",
+			Opacity:   opacity,
+			Blur:      blur,
+			Scale:     scale,
+			PositionX: posX,
+			PositionY: posY,
+			FitMode:   fitMode,
+		}, nil
+	}
+
+	bytes, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return &CustomBackgroundInfo{
 			Enabled:   false,
@@ -2054,6 +2814,67 @@ func (a *App) ReinstallServer(identifier string) error {
 	return nil
 }
 
+func safeDownloadToFile(ctx context.Context, downloadURL, targetPath string, allowOverwrite bool) error {
+	if _, err := security.ValidateHTTPURL(downloadURL, false); err != nil {
+		return fmt.Errorf("unsafe download URL: %w", err)
+	}
+	if info, err := os.Lstat(targetPath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to write to symlink destination")
+		}
+		if !allowOverwrite {
+			return fmt.Errorf("download destination already exists")
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	dlClient := &http.Client{
+		Timeout: 5 * time.Minute,
+		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("too many redirects")
+			}
+			if len(via) > 0 && strings.EqualFold(via[0].URL.Scheme, "https") && !strings.EqualFold(r.URL.Scheme, "https") {
+				return fmt.Errorf("refusing HTTPS downgrade redirect")
+			}
+			_, err := security.ValidateHTTPURL(r.URL.String(), false)
+			return err
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create download request: %w", err)
+	}
+	resp, err := dlClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to download file: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("download returned HTTP status %d", resp.StatusCode)
+	}
+
+	flags := os.O_WRONLY | os.O_CREATE
+	if allowOverwrite {
+		flags |= os.O_TRUNC
+	} else {
+		flags |= os.O_EXCL
+	}
+	outFile, err := os.OpenFile(targetPath, flags, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to create local file: %w", err)
+	}
+	defer outFile.Close()
+
+	if _, err := io.Copy(outFile, resp.Body); err != nil {
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+	return nil
+}
+
 // DownloadServerFileTo downloads a server file to user's specified path (default to Desktop or Downloads)
 func (a *App) DownloadServerFileTo(identifier, filePath, destinationDir string) (string, error) {
 	if err := a.checkSessionLock(); err != nil {
@@ -2073,13 +2894,7 @@ func (a *App) DownloadServerFileTo(identifier, filePath, destinationDir string) 
 	if fileName == "." || fileName == ".." || fileName == "" || strings.ContainsAny(fileName, "\\/:*?\"<>|\x00\r\n") || strings.IndexFunc(fileName, func(r rune) bool { return r < 32 }) >= 0 {
 		return "", fmt.Errorf("invalid download filename")
 	}
-	// Do not follow symlinks in the final component or overwrite existing files.
 	targetFilePath := filepath.Join(destinationDir, fileName)
-	if _, err := os.Lstat(targetFilePath); err == nil {
-		return "", fmt.Errorf("download destination already exists")
-	} else if !os.IsNotExist(err) {
-		return "", err
-	}
 	client, err := a.panelManager.GetClientAPI()
 	if err != nil {
 		return "", err
@@ -2089,25 +2904,8 @@ func (a *App) DownloadServerFileTo(identifier, filePath, destinationDir string) 
 		return "", err
 	}
 
-	resp, err := http.Get(downloadURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to download file: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("download returned HTTP status %d", resp.StatusCode)
-	}
-
-	outFile, err := os.OpenFile(targetFilePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return "", fmt.Errorf("failed to create local file: %w", err)
-	}
-	defer outFile.Close()
-
-	_, err = io.Copy(outFile, resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to save file: %w", err)
+	if err := safeDownloadToFile(a.ctx, downloadURL, targetFilePath, false); err != nil {
+		return "", err
 	}
 
 	a.logActivity("", "", identifier, "file:download_local", "success", fmt.Sprintf("Downloaded %s to %s", filePath, targetFilePath))
@@ -2136,6 +2934,8 @@ func (a *App) DownloadServerFileWithDialog(identifier, filePath, defaultFileName
 	}
 	if defaultFileName == "" {
 		defaultFileName = filepath.Base(filePath)
+	} else {
+		defaultFileName = filepath.Base(defaultFileName)
 	}
 	targetPath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		DefaultFilename: defaultFileName,
@@ -2157,25 +2957,8 @@ func (a *App) DownloadServerFileWithDialog(identifier, filePath, defaultFileName
 		return "", err
 	}
 
-	resp, err := http.Get(downloadURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to download file: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("download returned HTTP status %d", resp.StatusCode)
-	}
-
-	outFile, err := os.Create(targetPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to create local file: %w", err)
-	}
-	defer outFile.Close()
-
-	_, err = io.Copy(outFile, resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to save file: %w", err)
+	if err := safeDownloadToFile(a.ctx, downloadURL, targetPath, true); err != nil {
+		return "", err
 	}
 
 	a.logActivity("", "", identifier, "file:download_dialog", "success", fmt.Sprintf("Downloaded %s to %s", filePath, targetPath))
@@ -2220,6 +3003,16 @@ func (a *App) OpenDetachedWindow(config DetachedWindowConfig) error {
 	if a.detachedConfig.IsDetached {
 		return fmt.Errorf("detached windows cannot open additional windows")
 	}
+	switch config.Type {
+	case "", "server", "file-editor", "nodes", "settings", "apikeys", "ide", "activity", "admin":
+	default:
+		return fmt.Errorf("invalid detached window type")
+	}
+	for _, field := range []string{config.Type, config.Server, config.Subtab, config.FilePath, config.Title} {
+		if strings.ContainsAny(field, "\r\n\x00") || len(field) > 512 {
+			return fmt.Errorf("invalid detached window parameter")
+		}
+	}
 	a.detachedMu.Lock()
 	defer a.detachedMu.Unlock()
 	if a.detachedCount >= 5 {
@@ -2261,44 +3054,106 @@ func (a *App) CloseCurrentWindow() {
 
 // Helper to log activities
 func (a *App) logActivity(panelID, panelName, serverID, action, result, errMsg string) {
+	if a.db == nil {
+		return
+	}
 	a.db.SaveActivity(database.ActivityRecord{
 		PanelID:   panelID,
 		PanelName: panelName,
 		ServerID:  serverID,
 		Action:    action,
 		Result:    result,
-		Error:     errMsg,
+		Error:     logger.RedactString(errMsg),
 	})
+}
+
+// DiagnosticCheck represents a single automated health check item
+type DiagnosticCheck struct {
+	ID          string `json:"id"`
+	Category    string `json:"category"` // "security", "storage", "network", "runtime"
+	Title       string `json:"title"`
+	Status      string `json:"status"` // "pass", "warn", "fail"
+	Summary     string `json:"summary"`
+	Detail      string `json:"detail"`
+	Remediation string `json:"remediation,omitempty"`
+}
+
+// PanelConnectivityDiagnostics holds live network/TLS/API checks for the active panel
+type PanelConnectivityDiagnostics struct {
+	PanelID          string `json:"panelId"`
+	PanelName        string `json:"panelName"`
+	PanelURL         string `json:"panelUrl"`
+	Scheme           string `json:"scheme"`
+	DNSResolvedIPs   string `json:"dnsResolvedIps"`
+	DNSLatencyMs     int64  `json:"dnsLatencyMs"`
+	DNSError         string `json:"dnsError,omitempty"`
+	TLSVersion       string `json:"tlsVersion,omitempty"`
+	TLSCipherSuite   string `json:"tlsCipherSuite,omitempty"`
+	TLSCertExpiry    string `json:"tlsCertExpiry,omitempty"`
+	TLSCertIssuer    string `json:"tlsCertIssuer,omitempty"`
+	TLSValid         bool   `json:"tlsValid"`
+	TLSError         string `json:"tlsError,omitempty"`
+	ClientAPIStatus  string `json:"clientApiStatus"`
+	ClientAPILatency int64  `json:"clientApiLatencyMs"`
+	ClientAPIError   string `json:"clientApiError,omitempty"`
+	AppAPIStatus     string `json:"appApiStatus"`
+	AppAPILatency    int64  `json:"appApiLatencyMs"`
+	AppAPIError      string `json:"appApiError,omitempty"`
+	CheckedAt        string `json:"checkedAt"`
 }
 
 // SystemDiagnostics holds diagnostic info for tooling, configuration, and bug reporting
 type SystemDiagnostics struct {
-	AppVersion        string  `json:"appVersion"`
-	WailsVersion      string  `json:"wailsVersion"`
-	OS                string  `json:"os"`
-	OSName            string  `json:"osName"`
-	OSDisplayVersion  string  `json:"osDisplayVersion"`
-	OSBuild           string  `json:"osBuild"`
-	WebView2Version   string  `json:"webView2Version"`
-	Arch              string  `json:"arch"`
-	CPUCores          int     `json:"cpuCores"`
-	Hostname          string  `json:"hostname"`
-	GoVersion         string  `json:"goVersion"`
-	SQLiteVersion     string  `json:"sqliteVersion"`
-	AppDataDir        string  `json:"appDataDir"`
-	DatabasePath      string  `json:"databasePath"`
-	DatabaseSizeBytes int64   `json:"databaseSizeBytes"`
-	DatabaseWALMode   bool    `json:"databaseWalMode"`
-	PanelsCount       int     `json:"panelsCount"`
-	ActivePanelName   string  `json:"activePanelName"`
-	DPAPIActive       bool    `json:"dpapiActive"`
-	DPAPITestPassed   bool    `json:"dpapiTestPassed"`
-	DPAPILatencyMs    float64 `json:"dpapiLatencyMs"`
-	SecurityLockout   bool    `json:"securityLockout"`
-	AllocatedMemMB    float64 `json:"allocatedMemMb"`
-	TotalAllocMemMB   float64 `json:"totalAllocMemMb"`
-	GoroutinesCount   int     `json:"goroutinesCount"`
-	Timestamp         string  `json:"timestamp"`
+	AppVersion          string                    `json:"appVersion"`
+	WailsVersion        string                    `json:"wailsVersion"`
+	OS                  string                    `json:"os"`
+	OSName              string                    `json:"osName"`
+	OSDisplayVersion    string                    `json:"osDisplayVersion"`
+	OSBuild             string                    `json:"osBuild"`
+	WebView2Version     string                    `json:"webView2Version"`
+	Arch                string                    `json:"arch"`
+	CPUCores            int                       `json:"cpuCores"`
+	Hostname            string                    `json:"hostname"`
+	GoVersion           string                    `json:"goVersion"`
+	UptimeSeconds       int64                     `json:"uptimeSeconds"`
+	SQLiteVersion       string                    `json:"sqliteVersion"`
+	AppDataDir          string                    `json:"appDataDir"`
+	DatabasePath        string                    `json:"databasePath"`
+	DatabaseSizeBytes   int64                     `json:"databaseSizeBytes"`
+	DatabaseWALBytes    int64                     `json:"databaseWalBytes"`
+	DatabaseWALMode     bool                      `json:"databaseWalMode"`
+	DatabaseJournalMode string                    `json:"databaseJournalMode"`
+	DatabaseIntegrity   string                    `json:"databaseIntegrity"`
+	LogFilesCount       int                       `json:"logFilesCount"`
+	LogsTotalBytes      int64                     `json:"logsTotalBytes"`
+	DiskFreeBytes       uint64                    `json:"diskFreeBytes"`
+	PanelsCount         int                       `json:"panelsCount"`
+	ActivePanelName     string                    `json:"activePanelName"`
+	ActivePanelURL      string                    `json:"activePanelUrl"`
+	ActivePanelScheme   string                    `json:"activePanelScheme"`
+	ActiveHasClientKey  bool                      `json:"activeHasClientKey"`
+	ActiveHasAppKey     bool                      `json:"activeHasAppKey"`
+	ConsoleWSConnected  bool                      `json:"consoleWsConnected"`
+	ConsoleWSServer     string                    `json:"consoleWsServer"`
+	DPAPIActive         bool                      `json:"dpapiActive"`
+	DPAPITestPassed     bool                      `json:"dpapiTestPassed"`
+	DPAPILatencyMs      float64                   `json:"dpapiLatencyMs"`
+	TPMHardwareBacked   bool                      `json:"tpmHardwareBacked"`
+	SessionLockEnabled  bool                      `json:"sessionLockEnabled"`
+	SessionLockType     string                    `json:"sessionLockType"`
+	SecurityLockout     bool                      `json:"securityLockout"`
+	AutoWipeEnabled     bool                      `json:"autoWipeEnabled"`
+	FailedAttempts      int                       `json:"failedAttempts"`
+	AllocatedMemMB      float64                   `json:"allocatedMemMb"`
+	TotalAllocMemMB     float64                   `json:"totalAllocMemMb"`
+	GCPauseTotalMs      float64                   `json:"gcPauseTotalMs"`
+	NumGC               uint32                    `json:"numGc"`
+	GoroutinesCount     int                       `json:"goroutinesCount"`
+	DetachedCount       int                       `json:"detachedCount"`
+	RecentLogErrors     []string                  `json:"recentLogErrors"`
+	RecentFailedActions []database.ActivityRecord `json:"recentFailedActions"`
+	HealthChecks        []DiagnosticCheck         `json:"healthChecks"`
+	Timestamp           string                    `json:"timestamp"`
 }
 
 // GetSystemDiagnostics performs a complete system, security, and storage health check
@@ -2314,19 +3169,33 @@ func (a *App) GetSystemDiagnostics() (*SystemDiagnostics, error) {
 	if fi, err := os.Stat(dbPath); err == nil {
 		dbSize = fi.Size()
 	}
+	var walSize int64
+	if fi, err := os.Stat(dbPath + "-wal"); err == nil {
+		walSize = fi.Size()
+	}
 
 	panelsCount := 0
 	activePanelName := "None"
+	activePanelURL := ""
+	activePanelScheme := ""
+	activeHasClientKey := false
+	activeHasAppKey := false
 	if a.panelManager != nil {
 		if active, err := a.panelManager.GetActivePanel(); err == nil && active != nil {
 			activePanelName = active.Name
+			activePanelURL = active.URL
+			activeHasClientKey = active.HasClientKey
+			activeHasAppKey = active.HasAppKey
+			if parsed, perr := url.Parse(active.URL); perr == nil {
+				activePanelScheme = strings.ToLower(parsed.Scheme)
+			}
 		}
 		if panels, err := a.panelManager.GetAllPanels(); err == nil {
 			panelsCount = len(panels)
 		}
 	}
 
-	// In-memory test of Windows DPAPI
+	// In-memory test of Windows DPAPI (+ TPM 2.0 envelope if available)
 	start := time.Now()
 	testPayload := "synoradesk_diagnostic_dpapi_verify_" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	dpapiActive := a.credentials != nil
@@ -2339,52 +3208,362 @@ func (a *App) GetSystemDiagnostics() (*SystemDiagnostics, error) {
 		}
 	}
 	dpapiLatency := float64(time.Since(start).Microseconds()) / 1000.0
+	tpmBacked := security.IsTPMHardwareBacked()
 
 	lockoutActive := false
+	autoWipeEnabled := false
+	failedAttempts := 0
 	if a.lockoutManager != nil {
 		status := a.lockoutManager.GetStatus()
 		lockoutActive = status.IsLockedOut
+		autoWipeEnabled = status.EnableAutoWipe
+		failedAttempts = status.FailedAttempts
 	}
+
+	a.sessionMu.RLock()
+	lockEnabled := a.lockConfigEnabled
+	lockType := a.lockConfigType
+	a.sessionMu.RUnlock()
+	if !lockEnabled || lockType == "" {
+		lockType = "none"
+	}
+
+	a.wsMu.Lock()
+	wsConnected := a.activeConsoleWS != nil
+	wsServer := a.activeConsoleServer
+	a.wsMu.Unlock()
+
+	a.detachedMu.Lock()
+	detachedCount := a.detachedCount
+	a.detachedMu.Unlock()
 
 	osName, osDisplayVer, osBuild := getWindowsBuildDetails()
 	wv2Ver := getWebView2Version()
 	hostName, _ := os.Hostname()
 
 	sqliteVer := "3.x"
+	dbIntegrity := "unknown"
+	dbJournalMode := "unknown"
+	var recentFailed []database.ActivityRecord
 	if a.db != nil {
 		if ver, err := a.db.GetSQLiteVersion(); err == nil && ver != "" {
 			sqliteVer = ver
 		}
+		dbIntegrity, dbJournalMode = a.db.CheckIntegrity()
+		if failed, err := a.db.GetRecentFailedActivities(10); err == nil {
+			recentFailed = failed
+		}
+	}
+
+	logCount, logsBytes := logger.GetLogStats(a.appDataDir)
+	recentLogs := logger.ReadRecentErrors(a.appDataDir, 20)
+	diskFree := getDiskFreeBytes(a.appDataDir)
+
+	var uptimeSec int64
+	if !a.appStartTime.IsZero() {
+		uptimeSec = int64(time.Since(a.appStartTime).Seconds())
+	}
+
+	// Automated Health Checks
+	checks := make([]DiagnosticCheck, 0, 6)
+	if dpapiPassed && tpmBacked {
+		checks = append(checks, DiagnosticCheck{
+			ID:       "crypto_tpm_dpapi",
+			Category: "security",
+			Title:    "Mã hóa phần cứng TPM 2.0 + Windows DPAPI",
+			Status:   "pass",
+			Summary:  fmt.Sprintf("Hoạt động tốt (%.2f ms)", dpapiLatency),
+			Detail:   "API keys và dữ liệu nhạy cảm được mã hóa 2 lớp: Windows DPAPI (Current User) + AES-256-GCM bọc khóa bởi TPM 2.0.",
+		})
+	} else if dpapiPassed {
+		checks = append(checks, DiagnosticCheck{
+			ID:          "crypto_tpm_dpapi",
+			Category:    "security",
+			Title:       "Mã hóa Windows DPAPI (Fallback)",
+			Status:      "warn",
+			Summary:     fmt.Sprintf("DPAPI hoạt động (%.2f ms), không có TPM 2.0", dpapiLatency),
+			Detail:      "Thiết bị không khả dụng Microsoft Platform Crypto Provider (TPM 2.0); đang sử dụng Windows DPAPI thuần.",
+			Remediation: "Bật TPM 2.0 trong BIOS/UEFI hoặc cấu hình vTPM nếu chạy trong máy ảo để tăng cường bảo vệ phần cứng.",
+		})
+	} else {
+		checks = append(checks, DiagnosticCheck{
+			ID:          "crypto_tpm_dpapi",
+			Category:    "security",
+			Title:       "Hệ thống mã hóa DPAPI",
+			Status:      "fail",
+			Summary:     "Kiểm tra mã hóa/giải mã thất bại",
+			Detail:      "Không thể thực hiện roundtrip CryptProtectData/CryptUnprotectData.",
+			Remediation: "Kiểm tra quyền tài khoản Windows hiện tại hoặc khởi động lại phiên đăng nhập Windows.",
+		})
+	}
+
+	if lockEnabled {
+		checks = append(checks, DiagnosticCheck{
+			ID:       "session_lock",
+			Category: "security",
+			Title:    "Khóa phiên ứng dụng (App Lock)",
+			Status:   "pass",
+			Summary:  fmt.Sprintf("Đã bật (%s)", lockType),
+			Detail:   "Ứng dụng yêu cầu xác thực Argon2id khi khởi động và hỗ trợ tự khóa khi nhàn rỗi.",
+		})
+	} else {
+		checks = append(checks, DiagnosticCheck{
+			ID:          "session_lock",
+			Category:    "security",
+			Title:       "Khóa phiên ứng dụng (App Lock)",
+			Status:      "warn",
+			Summary:     "Chưa kích hoạt",
+			Detail:      "Bất kỳ ai có quyền truy cập vào phiên Windows hiện tại đều có thể mở SynoraDesk trực tiếp.",
+			Remediation: "Vào Cài đặt -> Bảo mật để thiết lập mã PIN hoặc Mật khẩu.",
+		})
+	}
+
+	if strings.EqualFold(dbIntegrity, "ok") {
+		checks = append(checks, DiagnosticCheck{
+			ID:       "sqlite_integrity",
+			Category: "storage",
+			Title:    "Toàn vẹn cơ sở dữ liệu SQLite",
+			Status:   "pass",
+			Summary:  fmt.Sprintf("OK (journal: %s)", strings.ToUpper(dbJournalMode)),
+			Detail:   fmt.Sprintf("PRAGMA quick_check trả về 'ok'. Dung lượng DB: %d bytes, WAL: %d bytes.", dbSize, walSize),
+		})
+	} else {
+		checks = append(checks, DiagnosticCheck{
+			ID:          "sqlite_integrity",
+			Category:    "storage",
+			Title:       "Toàn vẹn cơ sở dữ liệu SQLite",
+			Status:      "fail",
+			Summary:     "Phát hiện bất thường",
+			Detail:      fmt.Sprintf("PRAGMA quick_check: %s", dbIntegrity),
+			Remediation: "Sao lưu %APPDATA%\\SynoraDesk\\data\\pterodesk.db và kiểm tra lỗi ổ đĩa.",
+		})
+	}
+
+	if activePanelName == "None" || activePanelURL == "" {
+		checks = append(checks, DiagnosticCheck{
+			ID:          "panel_config",
+			Category:    "network",
+			Title:       "Cấu hình Panel kết nối",
+			Status:      "warn",
+			Summary:     "Chưa chọn Panel hoạt động",
+			Detail:      fmt.Sprintf("Hiện có %d panel được lưu nhưng chưa có panel nào đang kích hoạt.", panelsCount),
+			Remediation: "Mở mục Quản lý Panel để thêm hoặc kích hoạt một Pterodactyl Panel.",
+		})
+	} else if activePanelScheme == "http" {
+		checks = append(checks, DiagnosticCheck{
+			ID:          "panel_config",
+			Category:    "network",
+			Title:       "Bảo mật truyền tải Panel",
+			Status:      "warn",
+			Summary:     "Đang sử dụng HTTP không mã hóa",
+			Detail:      "API token được truyền qua HTTP cleartext. Chỉ nên dùng cho mạng nội bộ/localhost đáng tin cậy.",
+			Remediation: "Chuyển URL Panel sang HTTPS với chứng chỉ TLS hợp lệ.",
+		})
+	} else {
+		checks = append(checks, DiagnosticCheck{
+			ID:       "panel_config",
+			Category: "network",
+			Title:    "Cấu hình Panel kết nối",
+			Status:   "pass",
+			Summary:  fmt.Sprintf("%s (HTTPS)", activePanelName),
+			Detail:   fmt.Sprintf("Client Key: %v | Application Key: %v", activeHasClientKey, activeHasAppKey),
+		})
+	}
+
+	if diskFree > 0 && diskFree < 200*1024*1024 {
+		checks = append(checks, DiagnosticCheck{
+			ID:          "disk_space",
+			Category:    "storage",
+			Title:       "Dung lượng ổ đĩa khả dụng",
+			Status:      "warn",
+			Summary:     fmt.Sprintf("Còn trống %.1f MB", float64(diskFree)/(1024*1024)),
+			Detail:      "Dung lượng trống thấp có thể ảnh hưởng đến SQLite WAL, log và tải tệp từ server.",
+			Remediation: "Giải phóng dung lượng trên ổ đĩa chứa %APPDATA%.",
+		})
+	} else {
+		checks = append(checks, DiagnosticCheck{
+			ID:       "disk_space",
+			Category: "storage",
+			Title:    "Dung lượng ổ đĩa khả dụng",
+			Status:   "pass",
+			Summary:  fmt.Sprintf("Còn trống %.2f GB", float64(diskFree)/(1024*1024*1024)),
+			Detail:   fmt.Sprintf("Thư mục log hiện có %d tệp (%d bytes).", logCount, logsBytes),
+		})
 	}
 
 	return &SystemDiagnostics{
-		AppVersion:        AppVersion,
-		WailsVersion:      "v2.17.1",
-		OS:                goruntime.GOOS,
-		OSName:            osName,
-		OSDisplayVersion:  osDisplayVer,
-		OSBuild:           osBuild,
-		WebView2Version:   wv2Ver,
-		Arch:              goruntime.GOARCH,
-		CPUCores:          goruntime.NumCPU(),
-		Hostname:          hostName,
-		GoVersion:         goruntime.Version(),
-		SQLiteVersion:     sqliteVer,
-		AppDataDir:        a.appDataDir,
-		DatabasePath:      dbPath,
-		DatabaseSizeBytes: dbSize,
-		DatabaseWALMode:   true,
-		PanelsCount:       panelsCount,
-		ActivePanelName:   activePanelName,
-		DPAPIActive:       dpapiActive,
-		DPAPITestPassed:   dpapiPassed,
-		DPAPILatencyMs:    dpapiLatency,
-		SecurityLockout:   lockoutActive,
-		AllocatedMemMB:    float64(m.Alloc) / (1024 * 1024),
-		TotalAllocMemMB:   float64(m.TotalAlloc) / (1024 * 1024),
-		GoroutinesCount:   goruntime.NumGoroutine(),
-		Timestamp:         time.Now().UTC().Format(time.RFC3339),
+		AppVersion:          AppVersion,
+		WailsVersion:        "v2.17.1",
+		OS:                  goruntime.GOOS,
+		OSName:              osName,
+		OSDisplayVersion:    osDisplayVer,
+		OSBuild:             osBuild,
+		WebView2Version:     wv2Ver,
+		Arch:                goruntime.GOARCH,
+		CPUCores:            goruntime.NumCPU(),
+		Hostname:            hostName,
+		GoVersion:           goruntime.Version(),
+		UptimeSeconds:       uptimeSec,
+		SQLiteVersion:       sqliteVer,
+		AppDataDir:          a.appDataDir,
+		DatabasePath:        dbPath,
+		DatabaseSizeBytes:   dbSize,
+		DatabaseWALBytes:    walSize,
+		DatabaseWALMode:     strings.EqualFold(dbJournalMode, "wal"),
+		DatabaseJournalMode: dbJournalMode,
+		DatabaseIntegrity:   dbIntegrity,
+		LogFilesCount:       logCount,
+		LogsTotalBytes:      logsBytes,
+		DiskFreeBytes:       diskFree,
+		PanelsCount:         panelsCount,
+		ActivePanelName:     activePanelName,
+		ActivePanelURL:      activePanelURL,
+		ActivePanelScheme:   activePanelScheme,
+		ActiveHasClientKey:  activeHasClientKey,
+		ActiveHasAppKey:     activeHasAppKey,
+		ConsoleWSConnected:  wsConnected,
+		ConsoleWSServer:     wsServer,
+		DPAPIActive:         dpapiActive,
+		DPAPITestPassed:     dpapiPassed,
+		DPAPILatencyMs:      dpapiLatency,
+		TPMHardwareBacked:   tpmBacked,
+		SessionLockEnabled:  lockEnabled,
+		SessionLockType:     lockType,
+		SecurityLockout:     lockoutActive,
+		AutoWipeEnabled:     autoWipeEnabled,
+		FailedAttempts:      failedAttempts,
+		AllocatedMemMB:      float64(m.Alloc) / (1024 * 1024),
+		TotalAllocMemMB:     float64(m.TotalAlloc) / (1024 * 1024),
+		GCPauseTotalMs:      float64(m.PauseTotalNs) / 1e6,
+		NumGC:               m.NumGC,
+		GoroutinesCount:     goruntime.NumGoroutine(),
+		DetachedCount:       detachedCount,
+		RecentLogErrors:     recentLogs,
+		RecentFailedActions: recentFailed,
+		HealthChecks:        checks,
+		Timestamp:           time.Now().UTC().Format(time.RFC3339),
 	}, nil
+}
+
+// RunPanelConnectivityCheck performs live DNS, TLS, and API latency diagnostics for the active panel
+func (a *App) RunPanelConnectivityCheck() (*PanelConnectivityDiagnostics, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	if a.panelManager == nil {
+		return nil, fmt.Errorf("panel manager not initialized")
+	}
+	active, err := a.panelManager.GetActivePanel()
+	if err != nil || active == nil {
+		return nil, fmt.Errorf("no active panel selected")
+	}
+
+	res := &PanelConnectivityDiagnostics{
+		PanelID:   active.ID,
+		PanelName: active.Name,
+		PanelURL:  active.URL,
+		CheckedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	parsed, err := url.Parse(active.URL)
+	if err != nil {
+		res.DNSError = err.Error()
+		return res, nil
+	}
+	res.Scheme = strings.ToLower(parsed.Scheme)
+	hostname := parsed.Hostname()
+	port := parsed.Port()
+	if port == "" {
+		if res.Scheme == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+
+	// 1. DNS Lookup
+	dnsCtx, dnsCancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer dnsCancel()
+	dnsStart := time.Now()
+	ips, dnsErr := net.DefaultResolver.LookupHost(dnsCtx, hostname)
+	res.DNSLatencyMs = time.Since(dnsStart).Milliseconds()
+	if dnsErr != nil {
+		res.DNSError = dnsErr.Error()
+	} else {
+		res.DNSResolvedIPs = strings.Join(ips, ", ")
+	}
+
+	// 2. TLS Handshake (if HTTPS)
+	if res.Scheme == "https" {
+		dialer := &net.Dialer{Timeout: 5 * time.Second}
+		conn, tlsErr := tls.DialWithDialer(dialer, "tcp", net.JoinHostPort(hostname, port), &tls.Config{
+			ServerName: hostname,
+			MinVersion: tls.VersionTLS12,
+		})
+		if tlsErr != nil {
+			res.TLSValid = false
+			res.TLSError = tlsErr.Error()
+		} else {
+			state := conn.ConnectionState()
+			res.TLSValid = true
+			res.TLSVersion = tls.VersionName(state.Version)
+			res.TLSCipherSuite = tls.CipherSuiteName(state.CipherSuite)
+			if len(state.PeerCertificates) > 0 {
+				cert := state.PeerCertificates[0]
+				res.TLSCertExpiry = cert.NotAfter.UTC().Format("2006-01-02 15:04 UTC")
+				res.TLSCertIssuer = cert.Issuer.CommonName
+			}
+			_ = conn.Close()
+		}
+	}
+
+	// 3. Client API Ping
+	if active.HasClientKey {
+		clientAPI, cerr := a.panelManager.GetClientAPI()
+		if cerr != nil {
+			res.ClientAPIStatus = "error"
+			res.ClientAPIError = cerr.Error()
+		} else {
+			ctx, cancel := context.WithTimeout(a.ctx, 8*time.Second)
+			start := time.Now()
+			_, apiErr := clientAPI.GetAccount(ctx)
+			cancel()
+			res.ClientAPILatency = time.Since(start).Milliseconds()
+			if apiErr != nil {
+				res.ClientAPIStatus = "error"
+				res.ClientAPIError = logger.RedactString(apiErr.Error())
+			} else {
+				res.ClientAPIStatus = "ok"
+			}
+		}
+	} else {
+		res.ClientAPIStatus = "unconfigured"
+	}
+
+	// 4. Application API Ping
+	if active.HasAppKey {
+		appAPI, aerr := a.panelManager.GetAppAPI()
+		if aerr != nil {
+			res.AppAPIStatus = "error"
+			res.AppAPIError = aerr.Error()
+		} else {
+			ctx, cancel := context.WithTimeout(a.ctx, 8*time.Second)
+			start := time.Now()
+			apiErr := appAPI.TestConnection(ctx)
+			cancel()
+			res.AppAPILatency = time.Since(start).Milliseconds()
+			if apiErr != nil {
+				res.AppAPIStatus = "error"
+				res.AppAPIError = logger.RedactString(apiErr.Error())
+			} else {
+				res.AppAPIStatus = "ok"
+			}
+		}
+	} else {
+		res.AppAPIStatus = "unconfigured"
+	}
+
+	return res, nil
 }
 
 // GitHubReleaseAsset holds asset download info
@@ -2520,15 +3699,151 @@ func (a *App) PingActivePanel() (int64, error) {
 	if a.panelManager == nil {
 		return 0, fmt.Errorf("bộ quản lý panel chưa khởi tạo")
 	}
-	client, err := a.panelManager.GetClientAPI()
-	if err != nil {
-		return 0, err
+	pingCtx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+
+	if client, err := a.panelManager.GetClientAPI(); err == nil {
+		start := time.Now()
+		_, err = client.GetAccount(pingCtx)
+		elapsed := time.Since(start).Milliseconds()
+		if err != nil {
+			return elapsed, err
+		}
+		return elapsed, nil
 	}
+	if appAPI, err := a.panelManager.GetAppAPI(); err == nil {
+		start := time.Now()
+		err = appAPI.TestConnection(pingCtx)
+		elapsed := time.Since(start).Milliseconds()
+		if err != nil {
+			return elapsed, err
+		}
+		return elapsed, nil
+	}
+	return 0, fmt.Errorf("panel chưa cấu hình API key")
+}
+
+// --- Debug Manager Bindings (Diagnostic & Fault-Simulation Controls) ---
+
+// DebugStatus holds current runtime debug toggle states
+type DebugStatus struct {
+	TPMAvailable bool `json:"tpmAvailable"`
+	TPMEnabled   bool `json:"tpmEnabled"`
+	DBConnected  bool `json:"dbConnected"`
+	DebugLogging bool `json:"debugLogging"`
+}
+
+// GetDebugStatus returns the current state of runtime debug controls
+func (a *App) GetDebugStatus() (*DebugStatus, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return nil, err
+	}
+	dbConnected := false
+	if a.db != nil && a.db.Ping() == nil {
+		dbConnected = true
+	}
+	return &DebugStatus{
+		TPMAvailable: security.IsTPMHardwareBacked(),
+		TPMEnabled:   security.IsTPMEnabled(),
+		DBConnected:  dbConnected,
+		DebugLogging: logger.IsDebugLevel(),
+	}, nil
+}
+
+// DebugSetTPMEnabled toggles TPM 2.0 envelope wrapping at runtime (for testing DPAPI fallback)
+func (a *App) DebugSetTPMEnabled(enabled bool) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	security.SetTPMEnabled(enabled)
+	logger.Logger.Warn().Bool("tpmEnabled", enabled).Msg("Debug Manager toggled TPM 2.0 envelope mode")
+	return nil
+}
+
+// DebugTestCryptoRoundtrip tests Encrypt/Decrypt with the current TPM setting and reports mode & latency
+func (a *App) DebugTestCryptoRoundtrip() (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
+	payload := []byte("synoradesk_debug_crypto_test_" + strconv.FormatInt(time.Now().UnixNano(), 10))
 	start := time.Now()
-	_, err = client.GetAccount(a.ctx)
-	elapsed := time.Since(start).Milliseconds()
+	enc, err := security.Encrypt(payload)
 	if err != nil {
-		return elapsed, err
+		return "", fmt.Errorf("encrypt failed: %w", err)
 	}
-	return elapsed, nil
+	dec, err := security.Decrypt(enc)
+	if err != nil {
+		return "", fmt.Errorf("decrypt failed: %w", err)
+	}
+	elapsed := float64(time.Since(start).Microseconds()) / 1000.0
+	if string(dec) != string(payload) {
+		return "", fmt.Errorf("roundtrip mismatch")
+	}
+	mode := "Windows DPAPI only"
+	if len(enc) >= 7 && (string(enc[:7]) == "SDTPM2\x00" || string(enc[:7]) == "SDTPM1\x00") {
+		mode = "TPM 2.0 + Windows DPAPI (" + string(enc[:6]) + ")"
+	}
+	return fmt.Sprintf("OK | Mode: %s | Ciphertext: %d bytes | Latency: %.3f ms", mode, len(enc), elapsed), nil
+}
+
+// DebugToggleDBConnection disconnects or reconnects the local SQLite database for fault testing
+func (a *App) DebugToggleDBConnection(disconnect bool) (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
+	if disconnect {
+		if a.db != nil {
+			_ = a.db.Close()
+			a.db = nil
+		}
+		logger.Logger.Warn().Msg("Debug Manager disconnected SQLite database")
+		return "SQLite database disconnected", nil
+	}
+	if a.db != nil && a.db.Ping() == nil {
+		return "SQLite database already connected", nil
+	}
+	db, err := database.New(a.appDataDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to reconnect database: %w", err)
+	}
+	a.db = db
+	a.panelManager = panel.NewManager(a.db, a.credentials)
+	_ = a.panelManager.Initialize()
+	logger.Logger.Info().Msg("Debug Manager reconnected SQLite database")
+	return "SQLite database reconnected", nil
+}
+
+// DebugRunWALCheckpoint flushes the SQLite WAL journal into the main database file
+func (a *App) DebugRunWALCheckpoint() (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
+	if a.db == nil {
+		return "", fmt.Errorf("database is disconnected")
+	}
+	if err := a.db.WALCheckpoint(); err != nil {
+		return "", err
+	}
+	return "PRAGMA wal_checkpoint(TRUNCATE) completed", nil
+}
+
+// DebugSetLogLevel toggles zerolog debug verbosity at runtime
+func (a *App) DebugSetLogLevel(debug bool) error {
+	if err := a.checkSessionLock(); err != nil {
+		return err
+	}
+	logger.SetDebugLevel(debug)
+	logger.Logger.Info().Bool("debug", debug).Msg("Debug Manager updated log level")
+	return nil
+}
+
+// DebugRunGC forces Go garbage collection and returns post-GC heap stats
+func (a *App) DebugRunGC() (string, error) {
+	if err := a.checkSessionLock(); err != nil {
+		return "", err
+	}
+	goruntime.GC()
+	var m goruntime.MemStats
+	goruntime.ReadMemStats(&m)
+	return fmt.Sprintf("GC completed | Heap: %.2f MB | Goroutines: %d", float64(m.Alloc)/(1024*1024), goruntime.NumGoroutine()), nil
 }

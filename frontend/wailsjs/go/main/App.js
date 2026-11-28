@@ -6,6 +6,154 @@ export function AddPanel(arg1) {
   return window['go']['main']['App']['AddPanel'](arg1);
 }
 
+export function AdminCheckNodeHealth(arg1) {
+  return window['go']['main']['App']['AdminCheckNodeHealth'](arg1);
+}
+
+export function AdminCheckNodesHealth() {
+  return window['go']['main']['App']['AdminCheckNodesHealth']();
+}
+
+export function AdminCreateLocation(arg1) {
+  return window['go']['main']['App']['AdminCreateLocation'](arg1);
+}
+
+export function AdminCreateNodeAllocations(arg1, arg2) {
+  return window['go']['main']['App']['AdminCreateNodeAllocations'](arg1, arg2);
+}
+
+export function AdminCreateServer(arg1) {
+  return window['go']['main']['App']['AdminCreateServer'](arg1);
+}
+
+export function AdminCreateServerDatabase(arg1, arg2) {
+  return window['go']['main']['App']['AdminCreateServerDatabase'](arg1, arg2);
+}
+
+export function AdminCreateUser(arg1) {
+  return window['go']['main']['App']['AdminCreateUser'](arg1);
+}
+
+export function AdminDeleteLocation(arg1) {
+  return window['go']['main']['App']['AdminDeleteLocation'](arg1);
+}
+
+export function AdminDeleteNodeAllocation(arg1, arg2) {
+  return window['go']['main']['App']['AdminDeleteNodeAllocation'](arg1, arg2);
+}
+
+export function AdminDeleteServer(arg1, arg2) {
+  return window['go']['main']['App']['AdminDeleteServer'](arg1, arg2);
+}
+
+export function AdminDeleteServerDatabase(arg1, arg2) {
+  return window['go']['main']['App']['AdminDeleteServerDatabase'](arg1, arg2);
+}
+
+export function AdminDeleteUser(arg1) {
+  return window['go']['main']['App']['AdminDeleteUser'](arg1);
+}
+
+export function AdminGetEgg(arg1, arg2) {
+  return window['go']['main']['App']['AdminGetEgg'](arg1, arg2);
+}
+
+export function AdminGetLocation(arg1) {
+  return window['go']['main']['App']['AdminGetLocation'](arg1);
+}
+
+export function AdminGetNodeConfiguration(arg1) {
+  return window['go']['main']['App']['AdminGetNodeConfiguration'](arg1);
+}
+
+export function AdminGetServer(arg1) {
+  return window['go']['main']['App']['AdminGetServer'](arg1);
+}
+
+export function AdminGetServerDatabase(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AdminGetServerDatabase'](arg1, arg2, arg3);
+}
+
+export function AdminGetUser(arg1) {
+  return window['go']['main']['App']['AdminGetUser'](arg1);
+}
+
+export function AdminListEggs(arg1, arg2) {
+  return window['go']['main']['App']['AdminListEggs'](arg1, arg2);
+}
+
+export function AdminListLocations(arg1) {
+  return window['go']['main']['App']['AdminListLocations'](arg1);
+}
+
+export function AdminListNests(arg1) {
+  return window['go']['main']['App']['AdminListNests'](arg1);
+}
+
+export function AdminListNodeAllocations(arg1, arg2) {
+  return window['go']['main']['App']['AdminListNodeAllocations'](arg1, arg2);
+}
+
+export function AdminListNodes(arg1) {
+  return window['go']['main']['App']['AdminListNodes'](arg1);
+}
+
+export function AdminListServerDatabases(arg1, arg2) {
+  return window['go']['main']['App']['AdminListServerDatabases'](arg1, arg2);
+}
+
+export function AdminListServers(arg1) {
+  return window['go']['main']['App']['AdminListServers'](arg1);
+}
+
+export function AdminListUsers(arg1) {
+  return window['go']['main']['App']['AdminListUsers'](arg1);
+}
+
+export function AdminProbePermissions() {
+  return window['go']['main']['App']['AdminProbePermissions']();
+}
+
+export function AdminReinstallServer(arg1) {
+  return window['go']['main']['App']['AdminReinstallServer'](arg1);
+}
+
+export function AdminResetServerDatabasePassword(arg1, arg2) {
+  return window['go']['main']['App']['AdminResetServerDatabasePassword'](arg1, arg2);
+}
+
+export function AdminSuspendServer(arg1) {
+  return window['go']['main']['App']['AdminSuspendServer'](arg1);
+}
+
+export function AdminUnsuspendServer(arg1) {
+  return window['go']['main']['App']['AdminUnsuspendServer'](arg1);
+}
+
+export function AdminUpdateLocation(arg1, arg2) {
+  return window['go']['main']['App']['AdminUpdateLocation'](arg1, arg2);
+}
+
+export function AdminUpdateNode(arg1, arg2) {
+  return window['go']['main']['App']['AdminUpdateNode'](arg1, arg2);
+}
+
+export function AdminUpdateServerBuild(arg1, arg2) {
+  return window['go']['main']['App']['AdminUpdateServerBuild'](arg1, arg2);
+}
+
+export function AdminUpdateServerDetails(arg1, arg2) {
+  return window['go']['main']['App']['AdminUpdateServerDetails'](arg1, arg2);
+}
+
+export function AdminUpdateServerStartup(arg1, arg2) {
+  return window['go']['main']['App']['AdminUpdateServerStartup'](arg1, arg2);
+}
+
+export function AdminUpdateUser(arg1, arg2) {
+  return window['go']['main']['App']['AdminUpdateUser'](arg1, arg2);
+}
+
 export function AssignServerAllocation(arg1) {
   return window['go']['main']['App']['AssignServerAllocation'](arg1);
 }
@@ -60,6 +208,30 @@ export function CreateSchedule(arg1, arg2, arg3, arg4, arg5) {
 
 export function CreateSubuser(arg1, arg2, arg3) {
   return window['go']['main']['App']['CreateSubuser'](arg1, arg2, arg3);
+}
+
+export function DebugRunGC() {
+  return window['go']['main']['App']['DebugRunGC']();
+}
+
+export function DebugRunWALCheckpoint() {
+  return window['go']['main']['App']['DebugRunWALCheckpoint']();
+}
+
+export function DebugSetLogLevel(arg1) {
+  return window['go']['main']['App']['DebugSetLogLevel'](arg1);
+}
+
+export function DebugSetTPMEnabled(arg1) {
+  return window['go']['main']['App']['DebugSetTPMEnabled'](arg1);
+}
+
+export function DebugTestCryptoRoundtrip() {
+  return window['go']['main']['App']['DebugTestCryptoRoundtrip']();
+}
+
+export function DebugToggleDBConnection(arg1) {
+  return window['go']['main']['App']['DebugToggleDBConnection'](arg1);
 }
 
 export function DecompressFile(arg1, arg2, arg3) {
@@ -156,6 +328,10 @@ export function GetCustomBackground() {
 
 export function GetDashboardStats() {
   return window['go']['main']['App']['GetDashboardStats']();
+}
+
+export function GetDebugStatus() {
+  return window['go']['main']['App']['GetDebugStatus']();
 }
 
 export function GetDetachedModeInfo() {
@@ -348,6 +524,10 @@ export function RestartApp() {
 
 export function RestoreBackup(arg1, arg2, arg3) {
   return window['go']['main']['App']['RestoreBackup'](arg1, arg2, arg3);
+}
+
+export function RunPanelConnectivityCheck() {
+  return window['go']['main']['App']['RunPanelConnectivityCheck']();
 }
 
 export function SaveCustomBackgroundSettings(arg1, arg2, arg3, arg4, arg5, arg6) {

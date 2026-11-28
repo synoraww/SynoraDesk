@@ -9,7 +9,7 @@ import (
 // Application build and release metadata
 // Single source of truth for versioning across the Go backend
 const (
-	AppVersion     = "1.05A"
+	AppVersion     = "1.06A"
 	AppName        = "SynoraDesk"
 	AppGitHubRepo  = "synoraww/SynoraDesk"
 	AppAuthor      = "Synoraww"
@@ -51,10 +51,10 @@ func GetFixedAppDataDir() string {
 		}
 	}
 
-	_ = os.MkdirAll(synoraDir, 0755)
-	_ = os.MkdirAll(filepath.Join(synoraDir, "data"), 0755)
-	_ = os.MkdirAll(filepath.Join(synoraDir, "logs"), 0755)
-	_ = os.MkdirAll(filepath.Join(synoraDir, "backgrounds"), 0755)
+	_ = os.MkdirAll(synoraDir, 0700)
+	_ = os.MkdirAll(filepath.Join(synoraDir, "data"), 0700)
+	_ = os.MkdirAll(filepath.Join(synoraDir, "logs"), 0700)
+	_ = os.MkdirAll(filepath.Join(synoraDir, "backgrounds"), 0700)
 
 	return synoraDir
 }
@@ -67,7 +67,7 @@ func GetFixedAppDataDir() string {
 func GetFixedWebviewUserDataPath() string {
 	appData := GetFixedAppDataDir()
 	webviewPath := filepath.Join(appData, "webview")
-	_ = os.MkdirAll(webviewPath, 0755)
+	_ = os.MkdirAll(webviewPath, 0700)
 	return webviewPath
 }
 

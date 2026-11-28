@@ -30,6 +30,7 @@ interface SecurityState {
   enableAutoWipe: boolean; // Self-destruct wipe on excessive attempts
   wipeAttempts: number; // e.g. 10
   isDataWiped: boolean;
+  lastError?: string | null;
 
   // Actions
   setupLock: (type: LockType, passcode: string, currentPasscode?: string) => Promise<boolean>;
@@ -220,10 +221,21 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         failedAttempts: 0,
         isLockedOut: false,
         remainingLockoutSeconds: 0,
+        lastError: null,
       });
       get().resetActivityTimer();
       return true;
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      set({ lastError: msg });
+      try {
+        const status = await GetSecurityLockoutStatus();
+        set({
+          failedAttempts: status.failed_attempts,
+          isLockedOut: status.is_locked_out,
+          remainingLockoutSeconds: status.remaining_lockout_seconds,
+        });
+      } catch {}
       return false;
     }
   },

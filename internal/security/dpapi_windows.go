@@ -1,6 +1,7 @@
 package security
 
 import (
+	"bytes"
 	"fmt"
 	"unsafe"
 
@@ -43,8 +44,68 @@ func (b *dataBlob) free() {
 	}
 }
 
-// Encrypt encrypts data using Windows DPAPI (current user scope)
+// EncryptSystem encrypts system-level metadata (e.g. app_lock.dat, security_lockout.dat)
+// using Windows DPAPI + TPM 2.0 without passcode-key wrapping, so it remains readable
+// at startup before the user unlocks the session.
+func EncryptSystem(data []byte) ([]byte, error) {
+	dpapiBlob, err := dpapiEncryptRaw(data)
+	if err != nil {
+		return nil, err
+	}
+	if IsTPMEnabled() {
+		if sealed, tpmErr := tpmSealFastEnvelope(dpapiBlob); tpmErr == nil {
+			return sealed, nil
+		}
+	}
+	return dpapiBlob, nil
+}
+
+// Encrypt encrypts data using Windows DPAPI (current user scope), wraps with TPM 2.0
+// hardware-backed AES-256-GCM when available/enabled, and wraps with the user's
+// Argon2id passcode-derived AES-256-GCM key (SDPASS1) whenever App Lock is active.
 func Encrypt(data []byte) ([]byte, error) {
+	inner, err := EncryptSystem(data)
+	if err != nil {
+		return nil, err
+	}
+	if IsPasscodeKeyActive() {
+		if passSealed, passErr := wrapWithPasscodeKey(inner); passErr == nil {
+			return passSealed, nil
+		}
+	}
+	return inner, nil
+}
+
+// Decrypt decrypts SDPASS1 (passcode-bound AES-256-GCM), TPM+DPAPI (SDTPM2/SDTPM1), or legacy DPAPI blobs.
+func Decrypt(data []byte) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("cannot decrypt empty data")
+	}
+	if bytes.HasPrefix(data, []byte(passcodeEnvelopeMagic)) {
+		inner, err := unwrapWithPasscodeKey(data)
+		if err != nil {
+			return nil, err
+		}
+		data = inner
+	}
+	if bytes.HasPrefix(data, []byte(tpmFastEnvelopeMagic)) {
+		dpapiBlob, err := tpmOpenFastEnvelope(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unwrap TPM hardware envelope (v2): %w", err)
+		}
+		return dpapiDecryptRaw(dpapiBlob)
+	}
+	if bytes.HasPrefix(data, []byte(tpmEnvelopeMagic)) {
+		dpapiBlob, err := tpmOpenEnvelope(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unwrap TPM hardware envelope: %w", err)
+		}
+		return dpapiDecryptRaw(dpapiBlob)
+	}
+	return dpapiDecryptRaw(data)
+}
+
+func dpapiEncryptRaw(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("cannot encrypt empty data")
 	}
@@ -69,8 +130,7 @@ func Encrypt(data []byte) ([]byte, error) {
 	return outBlob.toBytes(), nil
 }
 
-// Decrypt decrypts DPAPI-encrypted data
-func Decrypt(data []byte) ([]byte, error) {
+func dpapiDecryptRaw(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("cannot decrypt empty data")
 	}

@@ -202,7 +202,7 @@ export const CommandPresetsBar: React.FC<CommandPresetsBarProps> = ({
         alignItems: 'center',
         gap: '6px',
         padding: '5px 8px',
-        backgroundColor: '#0C0F17',
+        backgroundColor: 'var(--color-surface-elevated)',
         borderTop: '1px solid var(--color-border)',
         borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
         userSelect: 'none',
@@ -452,7 +452,7 @@ export const CommandPresetsBar: React.FC<CommandPresetsBarProps> = ({
             style={{
               width: '100%',
               maxWidth: '420px',
-              backgroundColor: '#121622',
+              backgroundColor: 'var(--color-surface)',
               borderRadius: '8px',
               border: '1px solid var(--color-border)',
               padding: '16px',
@@ -581,7 +581,7 @@ export const CommandPresetsBar: React.FC<CommandPresetsBarProps> = ({
             style={{
               width: '100%',
               maxWidth: '460px',
-              backgroundColor: '#121622',
+              backgroundColor: 'var(--color-surface)',
               borderRadius: '8px',
               border: '1px solid var(--color-border)',
               padding: '16px',

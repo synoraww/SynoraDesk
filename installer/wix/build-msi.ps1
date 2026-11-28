@@ -51,13 +51,13 @@ if (-not (Test-Path $sourceExe)) {
     exit 1
 }
 
-$outputMsi = "$projectRoot\build\bin\SynoraDesk-Installer-v1.05A-x64.msi"
+$outputMsi = "$projectRoot\build\bin\SynoraDesk-Installer-v1.06A-x64.msi"
 $wxsFile = "$scriptDir\Package.wxs"
 
 Write-Host "[*] Compiling MSI package with WiX v7..." -ForegroundColor Yellow
 Push-Location $scriptDir
 try {
-    & $wixExe build `
+    & $wixExe build --acceptEula wix7 `
         -ext WixToolset.UI.wixext `
         -ext WixToolset.Util.wixext `
         -arch x64 `

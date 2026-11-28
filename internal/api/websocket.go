@@ -11,7 +11,11 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
+
+	"pterodesk/internal/security"
 )
+
+const maxWSMessageBytes = 10 * 1024 * 1024 // 10 MiB cap per WebSocket frame
 
 // WSEvent represents an event in the Pterodactyl Wings WebSocket protocol
 type WSEvent struct {
@@ -113,7 +117,12 @@ func (sws *ServerWebSocket) SendCommand(command string) error {
 
 // SendPower dispatches a power signal ("start", "stop", "restart", "kill")
 func (sws *ServerWebSocket) SendPower(signal string) error {
-	return sws.sendEvent("send power", []interface{}{signal})
+	switch signal {
+	case "start", "stop", "restart", "kill":
+		return sws.sendEvent("send power", []interface{}{signal})
+	default:
+		return fmt.Errorf("invalid power signal: %q", signal)
+	}
 }
 
 // RequestLogs requests historical console logs from Wings
@@ -182,6 +191,10 @@ func (sws *ServerWebSocket) runLoop() {
 }
 
 func (sws *ServerWebSocket) connectAndRead() error {
+	if _, err := security.ValidateHTTPURL(sws.socketURL, true); err != nil {
+		return fmt.Errorf("invalid websocket URL: %w", err)
+	}
+
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
 		TLSClientConfig: &tls.Config{
@@ -198,6 +211,7 @@ func (sws *ServerWebSocket) connectAndRead() error {
 	if err != nil {
 		return fmt.Errorf("dial failed: %w", err)
 	}
+	conn.SetReadLimit(maxWSMessageBytes)
 
 	sws.mu.Lock()
 	sws.conn = conn
@@ -270,7 +284,9 @@ func (sws *ServerWebSocket) handleIncomingMessage(msg WSEvent) {
 		sws.logger.Info().Msg("WebSocket token expiring, refreshing...")
 		if sws.refresher != nil {
 			go func() {
-				auth, err := sws.refresher(context.Background())
+				refreshCtx, cancel := context.WithTimeout(sws.ctx, 15*time.Second)
+				defer cancel()
+				auth, err := sws.refresher(refreshCtx)
 				if err == nil && auth != nil {
 					_ = sws.sendEvent("auth", []interface{}{auth.Token})
 				}

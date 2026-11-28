@@ -26,11 +26,18 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab }) => {
   const { theme, toggleTheme } = useUIStore();
-  const { panels, activePanel, currentAccount, panelAccounts, switchPanel, panelPingMs, checkPanelPing } = usePanelStore();
+  const { panels, activePanel, currentAccount, panelAccounts, switchPanel, panelPingMs, connectionStatus, connectionError, checkPanelPing, adminPermissions } = usePanelStore();
   const isLocked = useSecurityStore((s) => s.isLocked);
   const { activeTabId, updateTab } = useWorkspaceStore();
   const { fetchServers, fetchDashboardStats } = useServerStore();
   const { t } = useI18n();
+
+  const panelPerms = activePanel ? adminPermissions[activePanel.id] : undefined;
+  const hasReadableAppApi = Boolean(
+    activePanel?.hasAppKey &&
+      panelPerms &&
+      Object.values(panelPerms).some((p) => p.allowed)
+  );
 
   const [panelDropdownOpen, setPanelDropdownOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -229,12 +236,12 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab 
               fontSize: '11px',
               color: 'var(--color-primary-light)',
             }}
-            title={`API Key xác thực: ${currentAccount.username} (${currentAccount.email})${currentAccount.admin ? ' • Root Admin' : ''}`}
+            title={`API Key xác thực: ${currentAccount.username} (${currentAccount.email})${hasReadableAppApi ? ` • ${t('admin.appApiReadable')}` : ''}`}
           >
             <PanelFavicon url={activePanel?.url} name={activePanel?.name} size={13} />
             <span style={{ fontWeight: 600 }}>{currentAccount.username}</span>
             <span style={{ color: 'var(--color-text-muted)', fontSize: '10px' }}>({currentAccount.email})</span>
-            {currentAccount.admin && (
+            {hasReadableAppApi && (
               <span
                 style={{
                   fontSize: '9px',
@@ -260,7 +267,13 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab 
             onClick={() => {
               if (!isLocked) checkPanelPing();
             }}
-            title={panelPingMs !== null ? `${t('ping.latency') || 'Độ trễ Panel'}: ${panelPingMs} ms (Click để kiểm tra lại)` : (t('ping.checking') || 'Đang kiểm tra kết nối...')}
+            title={
+              connectionStatus === 'disconnected'
+                ? `${connectionError || 'Không thể kết nối đến máy chủ'} (Click để thử lại)`
+                : panelPingMs !== null
+                ? `${t('ping.latency') || 'Độ trễ Panel'}: ${panelPingMs} ms (Click để kiểm tra lại)`
+                : t('ping.checking') || 'Đang kiểm tra kết nối...'
+            }
             className="btn-interactive"
             style={{
               display: 'flex',
@@ -268,12 +281,12 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab 
               gap: '5px',
               padding: '3px 8px',
               borderRadius: '5px',
-              backgroundColor: 'var(--color-surface-hover)',
-              border: '1px solid var(--color-border)',
+              backgroundColor: connectionStatus === 'disconnected' ? 'rgba(239, 68, 68, 0.12)' : 'var(--color-surface-hover)',
+              border: `1px solid ${connectionStatus === 'disconnected' ? 'rgba(239, 68, 68, 0.35)' : 'var(--color-border)'}`,
               fontSize: '11px',
               fontFamily: 'var(--font-mono)',
               cursor: 'pointer',
-              color: 'var(--color-text-secondary)',
+              color: connectionStatus === 'disconnected' ? '#EF4444' : 'var(--color-text-secondary)',
             }}
           >
             <span
@@ -282,7 +295,9 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab 
                 height: '6px',
                 borderRadius: '50%',
                 backgroundColor:
-                  panelPingMs === null
+                  connectionStatus === 'disconnected'
+                    ? '#EF4444'
+                    : panelPingMs === null
                     ? 'var(--color-text-muted)'
                     : panelPingMs < 150
                     ? '#22C55E'
@@ -290,13 +305,17 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenPanelModal, onNavigateTab 
                     ? '#EAB308'
                     : '#EF4444',
                 boxShadow:
-                  panelPingMs !== null && panelPingMs < 150
+                  connectionStatus !== 'disconnected' && panelPingMs !== null && panelPingMs < 150
                     ? '0 0 6px rgba(34, 197, 94, 0.6)'
                     : 'none',
               }}
             />
             <span style={{ fontWeight: 600 }}>
-              {panelPingMs !== null ? `${panelPingMs} ms` : '-- ms'}
+              {connectionStatus === 'disconnected'
+                ? 'Mất kết nối'
+                : panelPingMs !== null
+                ? `${panelPingMs} ms`
+                : '-- ms'}
             </span>
           </button>
         )}

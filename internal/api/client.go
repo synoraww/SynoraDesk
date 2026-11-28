@@ -7,10 +7,19 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"pterodesk/internal/security"
+)
+
+const (
+	maxAPIResponseBytes  = 64 * 1024 * 1024 // 64 MiB cap on API response bodies
+	maxRetryAfterSeconds = 120              // 2 minute cap on Retry-After header
 )
 
 // ClientConfig configures the HTTP client
@@ -20,6 +29,7 @@ type ClientConfig struct {
 	Timeout    time.Duration
 	MaxRetries int
 	UserAgent  string
+	Transport  http.RoundTripper
 }
 
 // HTTPClient is a reusable HTTP client for Pterodactyl API requests
@@ -38,16 +48,21 @@ func NewHTTPClient(config ClientConfig) *HTTPClient {
 	}
 	if config.MaxRetries == 0 {
 		config.MaxRetries = 3
+	} else if config.MaxRetries < 0 {
+		config.MaxRetries = 0
 	}
 	if config.UserAgent == "" {
-		config.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 SynoraDesk/1.05A"
+		config.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 SynoraDesk/1.06A"
 	}
 
-	transport := &http.Transport{
-		MaxIdleConns:        20,
-		MaxIdleConnsPerHost: 10,
-		IdleConnTimeout:     90 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
+	transport := config.Transport
+	if transport == nil {
+		transport = &http.Transport{
+			MaxIdleConns:        20,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+		}
 	}
 
 	return &HTTPClient{
@@ -55,6 +70,24 @@ func NewHTTPClient(config ClientConfig) *HTTPClient {
 		httpClient: &http.Client{
 			Timeout:   config.Timeout,
 			Transport: transport,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 5 {
+					return fmt.Errorf("stopped after 5 redirects")
+				}
+				if len(via) > 0 {
+					orig := via[0].URL
+					if strings.EqualFold(orig.Scheme, "https") && !strings.EqualFold(req.URL.Scheme, "https") {
+						return fmt.Errorf("refusing HTTPS to %s redirect downgrade", req.URL.Scheme)
+					}
+					if !strings.EqualFold(orig.Host, req.URL.Host) {
+						return fmt.Errorf("refusing cross-host API redirect from %s to %s", orig.Host, req.URL.Host)
+					}
+				}
+				if _, err := security.ValidateHTTPURL(req.URL.String(), false); err != nil {
+					return fmt.Errorf("blocked unsafe redirect target: %w", err)
+				}
+				return nil
+			},
 		},
 	}
 }
@@ -89,7 +122,14 @@ func (c *HTTPClient) Request(ctx context.Context, method, path string, body inte
 	userAgent := c.config.UserAgent
 	c.mu.RUnlock()
 
-	url := baseURL + path
+	if strings.TrimSpace(baseURL) == "" {
+		return nil, 0, fmt.Errorf("base URL is not configured")
+	}
+	if path != "" && !strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "?") {
+		return nil, 0, fmt.Errorf("invalid API request path")
+	}
+
+	reqURL := baseURL + path
 
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
@@ -140,7 +180,7 @@ func (c *HTTPClient) Request(ctx context.Context, method, path string, body inte
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+		req, err := http.NewRequestWithContext(ctx, method, reqURL, reqBody)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -162,18 +202,21 @@ func (c *HTTPClient) Request(ctx context.Context, method, path string, body inte
 		c.mu.Unlock()
 
 		if err != nil {
-			lastErr = &ErrConnectionFailed{URL: url, Err: err}
+			lastErr = &ErrConnectionFailed{URL: reqURL, Err: err}
 			if ctx.Err() != nil {
 				return nil, 0, ctx.Err()
 			}
 			continue
 		}
 
-		respBody, err := io.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponseBytes+1))
 		resp.Body.Close()
 		if err != nil {
 			lastErr = fmt.Errorf("failed to read response body: %w", err)
 			continue
+		}
+		if int64(len(respBody)) > maxAPIResponseBytes {
+			return nil, resp.StatusCode, fmt.Errorf("API response exceeded maximum allowed size (%d bytes)", maxAPIResponseBytes)
 		}
 
 		// Handle rate limiting
@@ -182,6 +225,11 @@ func (c *HTTPClient) Request(ctx context.Context, method, path string, body inte
 			waitSecs := 60 // default wait
 			if retryAfter != "" {
 				if secs, err := strconv.Atoi(retryAfter); err == nil {
+					if secs < 0 {
+						secs = 0
+					} else if secs > maxRetryAfterSeconds {
+						secs = maxRetryAfterSeconds
+					}
 					waitSecs = secs
 				}
 			}
@@ -194,13 +242,18 @@ func (c *HTTPClient) Request(ctx context.Context, method, path string, body inte
 
 		// Handle server errors (retry)
 		if resp.StatusCode >= 500 {
-			lastErr = &APIError{StatusCode: resp.StatusCode, Code: "ServerError", Message: string(respBody)}
+			msg := strings.TrimSpace(string(respBody))
+			if len(msg) > 512 {
+				msg = msg[:512] + "..."
+			}
+			lastErr = &APIError{StatusCode: resp.StatusCode, Code: "ServerError", Message: msg}
 			continue
 		}
 
 		// Handle client errors (don't retry)
 		if resp.StatusCode >= 400 {
-			apiErr := parseAPIError(resp.StatusCode, respBody)
+			reqID := extractRequestID(resp.Header)
+			apiErr := parseAPIError(resp.StatusCode, respBody, reqID)
 			return nil, resp.StatusCode, apiErr
 		}
 
@@ -252,7 +305,16 @@ func (c *HTTPClient) TestConnection(ctx context.Context) error {
 	return nil
 }
 
-func parseAPIError(statusCode int, body []byte) *APIError {
+func extractRequestID(h http.Header) string {
+	for _, key := range []string{"X-Request-Id", "X-Pterodactyl-Request-Id", "Cf-Ray"} {
+		if v := strings.TrimSpace(h.Get(key)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func parseAPIError(statusCode int, body []byte, requestID string) *APIError {
 	statusText := http.StatusText(statusCode)
 	if statusText == "" {
 		statusText = fmt.Sprintf("HTTP_%d", statusCode)
@@ -262,6 +324,13 @@ func parseAPIError(statusCode int, body []byte) *APIError {
 		StatusCode: statusCode,
 		Code:       statusText,
 		Message:    statusText,
+		RequestID:  requestID,
+	}
+
+	if statusCode == http.StatusForbidden {
+		apiErr.PermissionHint = "The API key lacks permission for this action or resource. Check key scopes in Panel Admin -> Application API."
+	} else if statusCode == http.StatusUnauthorized {
+		apiErr.PermissionHint = "Authentication failed. Verify that the API key is valid and has not been revoked."
 	}
 
 	trimmedBody := strings.TrimSpace(string(body))
@@ -277,6 +346,12 @@ func parseAPIError(statusCode int, body []byte) *APIError {
 		apiErr.Message = errResp.Errors[0].Detail
 		for _, e := range errResp.Errors {
 			apiErr.Errors = append(apiErr.Errors, e.Detail)
+			if e.Meta != nil && e.Meta.Source != nil && e.Meta.Source.Field != "" {
+				if apiErr.FieldErrors == nil {
+					apiErr.FieldErrors = make(map[string]string)
+				}
+				apiErr.FieldErrors[e.Meta.Source.Field] = e.Detail
+			}
 		}
 		return apiErr
 	}
@@ -311,6 +386,81 @@ func parseAPIError(statusCode int, body []byte) *APIError {
 	}
 
 	return apiErr
+}
+
+// BuildQueryString builds a deterministic query string from ListOptions
+func BuildQueryString(opts ListOptions) string {
+	vals := url.Values{}
+	if opts.Page > 0 {
+		vals.Set("page", strconv.Itoa(opts.Page))
+	}
+	if opts.PerPage > 0 {
+		perPage := opts.PerPage
+		if perPage > 100 {
+			perPage = 100
+		}
+		vals.Set("per_page", strconv.Itoa(perPage))
+	}
+	if len(opts.Filters) > 0 {
+		keys := make([]string, 0, len(opts.Filters))
+		for k, v := range opts.Filters {
+			if strings.TrimSpace(v) != "" {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			vals.Set(fmt.Sprintf("filter[%s]", k), strings.TrimSpace(opts.Filters[k]))
+		}
+	}
+	if strings.TrimSpace(opts.Sort) != "" {
+		vals.Set("sort", strings.TrimSpace(opts.Sort))
+	}
+	if len(opts.Include) > 0 {
+		var clean []string
+		for _, inc := range opts.Include {
+			if s := strings.TrimSpace(inc); s != "" {
+				clean = append(clean, s)
+			}
+		}
+		if len(clean) > 0 {
+			vals.Set("include", strings.Join(clean, ","))
+		}
+	}
+	return vals.Encode()
+}
+
+// FetchPage fetches a single page of a paginated endpoint with ListOptions
+func FetchPage[T any](ctx context.Context, client *HTTPClient, path string, opts ListOptions) (*PaginatedResult[T], error) {
+	query := BuildQueryString(opts)
+	fullPath := path
+	if query != "" {
+		separator := "?"
+		if strings.Contains(path, "?") {
+			separator = "&"
+		}
+		fullPath = path + separator + query
+	}
+
+	data, _, err := client.Get(ctx, fullPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp PaginatedResponse[T]
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal paginated response: %w", err)
+	}
+
+	items := make([]T, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		items = append(items, item.Attributes)
+	}
+
+	return &PaginatedResult[T]{
+		Items:      items,
+		Pagination: resp.Meta.Pagination,
+	}, nil
 }
 
 // FetchAllPages fetches all pages of a paginated endpoint

@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	mysql "github.com/go-sql-driver/mysql"
 )
+
+const maxMySQLQueryRows = 10000
 
 // DBConfig holds MySQL connection config
 type DBConfig struct {
@@ -101,9 +104,15 @@ func (c *Client) ExecuteQuery(ctx context.Context, query string) (*QueryResult, 
 	startTime := time.Now()
 	res := &QueryResult{}
 
-	rows, err := c.db.QueryContext(ctx, query)
-	if err != nil {
-		// Try Exec if Query failed (e.g. for UPDATE / INSERT / DELETE)
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return nil, fmt.Errorf("query cannot be empty")
+	}
+
+	firstWord := strings.ToUpper(strings.Fields(trimmed)[0])
+	isReadQuery := firstWord == "SELECT" || firstWord == "SHOW" || firstWord == "DESCRIBE" || firstWord == "DESC" || firstWord == "EXPLAIN" || firstWord == "WITH"
+
+	if !isReadQuery {
 		execRes, execErr := c.db.ExecContext(ctx, query)
 		if execErr != nil {
 			return nil, execErr
@@ -112,6 +121,11 @@ func (c *Client) ExecuteQuery(ctx context.Context, query string) (*QueryResult, 
 		res.RowsAffected = affected
 		res.ExecutionTimeMs = time.Since(startTime).Milliseconds()
 		return res, nil
+	}
+
+	rows, err := c.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -122,6 +136,9 @@ func (c *Client) ExecuteQuery(ctx context.Context, query string) (*QueryResult, 
 	res.Columns = cols
 
 	for rows.Next() {
+		if len(res.Rows) >= maxMySQLQueryRows {
+			break
+		}
 		columns := make([]interface{}, len(cols))
 		columnPointers := make([]interface{}, len(cols))
 		for i := range columns {
@@ -142,6 +159,10 @@ func (c *Client) ExecuteQuery(ctx context.Context, query string) (*QueryResult, 
 			}
 		}
 		res.Rows = append(res.Rows, rowValues)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	res.ExecutionTimeMs = time.Since(startTime).Milliseconds()

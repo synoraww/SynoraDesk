@@ -86,12 +86,18 @@ export const UpdateCheckerModal: React.FC<UpdateCheckerModalProps> = ({ isOpen, 
 
   const handleOpenReleaseUrl = (url?: string) => {
     const targetUrl = url || releaseInfo?.htmlUrl || `${APP_CONFIG.githubUrl}/releases`;
+    try {
+      const parsed = new URL(targetUrl);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return;
+    } catch {
+      return;
+    }
     // @ts-ignore
     const runtime = window.runtime;
     if (runtime?.BrowserOpenURL) {
       runtime.BrowserOpenURL(targetUrl);
     } else {
-      window.open(targetUrl, '_blank');
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
     }
   };
 

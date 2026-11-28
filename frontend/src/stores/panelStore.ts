@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { useSecurityStore } from './securityStore';
+import { useServerStore } from './serverStore';
+import { PermissionProbeStatus } from '../types/admin';
 
 // Types matching Go backend models
 export interface Panel {
@@ -57,6 +59,10 @@ interface PanelState {
   loading: boolean;
   error: string | null;
   panelPingMs: number | null;
+  connectionStatus: 'idle' | 'checking' | 'connected' | 'disconnected';
+  connectionError: string | null;
+  adminPermissions: Record<string, Record<string, PermissionProbeStatus>>;
+  probingPermissions: boolean;
 
   // Actions
   setPanels: (panels: Panel[]) => void;
@@ -66,6 +72,7 @@ interface PanelState {
   setError: (error: string | null) => void;
   setPanelPingMs: (ping: number | null) => void;
   recordLatency: (durationMs: number) => void;
+  markDisconnected: (errorMsg?: string) => void;
 
   // Async actions (call Go backend)
   fetchPanels: () => Promise<void>;
@@ -78,6 +85,7 @@ interface PanelState {
   deletePanel: (id: string) => Promise<void>;
   switchPanel: (id: string) => Promise<void>;
   testConnection: (id: string) => Promise<ConnectionTestResult>;
+  probeAdminPermissions: (force?: boolean) => Promise<void>;
 }
 
 const getWailsBindings = () => {
@@ -97,6 +105,10 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   loading: false,
   error: null,
   panelPingMs: null,
+  connectionStatus: 'idle',
+  connectionError: null,
+  adminPermissions: {},
+  probingPermissions: false,
 
   setPanels: (panels) => set({ panels }),
   setActivePanel: (panel) => set({ activePanel: panel }),
@@ -106,12 +118,28 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   setPanelPingMs: (panelPingMs) => set({ panelPingMs }),
   recordLatency: (durationMs) => {
     if (typeof durationMs === 'number' && durationMs >= 0) {
-      set({ panelPingMs: Math.round(durationMs) });
+      set({
+        panelPingMs: Math.round(durationMs),
+        connectionStatus: 'connected',
+        connectionError: null,
+      });
     }
+  },
+  markDisconnected: (errorMsg) => {
+    set({
+      panelPingMs: null,
+      connectionStatus: 'disconnected',
+      connectionError: errorMsg || 'Không thể kết nối đến máy chủ',
+    });
   },
 
   checkPanelPing: async () => {
     if (useSecurityStore.getState().isLocked) {
+      return null;
+    }
+    const active = get().activePanel;
+    if (!active) {
+      set({ panelPingMs: null, connectionStatus: 'idle', connectionError: null });
       return null;
     }
     try {
@@ -119,17 +147,21 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       const app = window.go?.main?.App;
       if (app?.PingActivePanel) {
         const ping = await app.PingActivePanel();
-        const pingNum = typeof ping === 'number' ? Math.round(ping) : null;
-        set({ panelPingMs: pingNum });
-        return pingNum;
-      } else if (app?.GetActivePanelPing) {
-        const ping = await app.GetActivePanelPing();
-        const pingNum = typeof ping === 'number' && ping > 0 ? Math.round(ping) : null;
-        set({ panelPingMs: pingNum });
+        const pingNum = typeof ping === 'number' ? Math.round(ping) : 0;
+        set({
+          panelPingMs: pingNum,
+          connectionStatus: 'connected',
+          connectionError: null,
+        });
         return pingNum;
       }
-    } catch {
-      // Non-fatal if offline
+    } catch (err: any) {
+      const msg = err?.message || String(err) || 'Không thể kết nối đến máy chủ';
+      set({
+        panelPingMs: null,
+        connectionStatus: 'disconnected',
+        connectionError: msg,
+      });
     }
     return null;
   },
@@ -141,10 +173,12 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       const panels = await app.GetPanels();
       set({ panels: panels || [], loading: false });
 
-      // Automatically fetch accounts for each panel that has a client key
+      // Automatically fetch accounts for panels that have a client key and are not already cached
       if (panels && panels.length > 0) {
+        const activeId = get().activePanel?.id;
+        const cachedAccounts = get().panelAccounts;
         panels.forEach((p: Panel) => {
-          if (p.hasClientKey) {
+          if (p.hasClientKey && p.id !== activeId && !cachedAccounts[p.id]) {
             get().fetchPanelAccount(p.id);
           }
         });
@@ -158,34 +192,52 @@ export const usePanelStore = create<PanelState>((set, get) => ({
     try {
       const app = getWailsBindings();
       const panel = await app.GetActivePanel();
-      set({ activePanel: panel });
-      if (panel) {
-        await get().fetchCurrentAccount();
-        get().checkPanelPing();
+      if (!panel) {
+        set({
+          activePanel: null,
+          currentAccount: null,
+          panelPingMs: null,
+          connectionStatus: 'idle',
+          connectionError: null,
+        });
+        useServerStore.getState().resetPanelData();
+        return;
       }
+      set({
+        activePanel: panel,
+        currentAccount: panel.hasClientKey ? get().panelAccounts[panel.id] || null : null,
+      });
+      if (!panel.hasClientKey) {
+        useServerStore.getState().resetPanelData();
+      } else {
+        await get().fetchCurrentAccount();
+      }
+      await get().checkPanelPing();
     } catch (err: any) {
       set({ error: err.message || 'Failed to fetch active panel' });
     }
   },
 
   fetchCurrentAccount: async () => {
+    const active = get().activePanel;
+    if (!active || !active.hasClientKey) {
+      set({ currentAccount: null });
+      return;
+    }
     try {
       const app = getWailsBindings();
       const account = await app.GetCurrentAccount();
       if (account) {
         set({ currentAccount: account });
-        const active = get().activePanel;
-        if (active) {
-          set((state) => ({
-            panelAccounts: {
-              ...state.panelAccounts,
-              [active.id]: account,
-            },
-          }));
-        }
+        set((state) => ({
+          panelAccounts: {
+            ...state.panelAccounts,
+            [active.id]: account,
+          },
+        }));
       }
-    } catch {
-      // Ignored if account not available or offline
+    } catch (err: any) {
+      set({ currentAccount: null });
     }
   },
 
@@ -212,34 +264,68 @@ export const usePanelStore = create<PanelState>((set, get) => ({
     const app = getWailsBindings();
     const panel = await app.AddPanel(input);
     await get().fetchPanels();
+    await get().fetchActivePanel();
     return panel;
   },
 
   updatePanel: async (id, input) => {
     const app = getWailsBindings();
     const panel = await app.UpdatePanel(id, input);
+    set((state) => {
+      const nextPerms = { ...state.adminPermissions };
+      delete nextPerms[id];
+      const nextAccounts = { ...state.panelAccounts };
+      delete nextAccounts[id];
+      return { adminPermissions: nextPerms, panelAccounts: nextAccounts };
+    });
     await get().fetchPanels();
+    if (get().activePanel?.id === id) {
+      useServerStore.getState().resetPanelData();
+      set({
+        currentAccount: null,
+        panelPingMs: null,
+        connectionStatus: 'checking',
+        connectionError: null,
+      });
+      await get().fetchActivePanel();
+      get().probeAdminPermissions(true);
+    }
     return panel;
   },
 
   deletePanel: async (id) => {
     const app = getWailsBindings();
     await app.DeletePanel(id);
+    set((state) => {
+      const nextPerms = { ...state.adminPermissions };
+      delete nextPerms[id];
+      const nextAccounts = { ...state.panelAccounts };
+      delete nextAccounts[id];
+      return { adminPermissions: nextPerms, panelAccounts: nextAccounts };
+    });
     await get().fetchPanels();
     if (get().activePanel?.id === id) {
-      set({ activePanel: null, currentAccount: null });
+      useServerStore.getState().resetPanelData();
+      set({
+        activePanel: null,
+        currentAccount: null,
+        panelPingMs: null,
+        connectionStatus: 'idle',
+        connectionError: null,
+      });
     }
   },
 
   switchPanel: async (id) => {
-    // Immediately set active panel and cached account from state to avoid any visual lag
     const targetPanel = get().panels.find((p) => p.id === id);
-    if (targetPanel) {
-      set({
-        activePanel: targetPanel,
-        currentAccount: get().panelAccounts[id] || null,
-      });
-    }
+    useServerStore.getState().resetPanelData();
+    set({
+      activePanel: targetPanel || null,
+      currentAccount: targetPanel?.hasClientKey ? get().panelAccounts[id] || null : null,
+      panelPingMs: null,
+      connectionStatus: 'checking',
+      connectionError: null,
+    });
 
     const app = getWailsBindings();
     await app.SwitchPanel(id);
@@ -265,5 +351,42 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       }));
     }
     return res;
+  },
+
+  probeAdminPermissions: async (force = false) => {
+    const active = get().activePanel;
+    if (!active || !active.hasAppKey || useSecurityStore.getState().isLocked) return;
+    if (!force && get().adminPermissions[active.id]) return;
+    if (get().probingPermissions) return;
+
+    set({ probingPermissions: true });
+    try {
+      const app = getWailsBindings();
+      if (app?.AdminProbePermissions) {
+        const res = await app.AdminProbePermissions();
+        if (res) {
+          set((state) => ({
+            adminPermissions: {
+              ...state.adminPermissions,
+              [active.id]: res,
+            },
+          }));
+          const statuses = Object.values(res) as PermissionProbeStatus[];
+          const anyAllowed = statuses.some((s) => s.allowed);
+          const allUnreachable =
+            statuses.length > 0 &&
+            !anyAllowed &&
+            statuses.every((s) => !s.statusCode || s.statusCode === 0);
+          if (allUnreachable) {
+            const firstErr = statuses.find((s) => s.error)?.error || 'Không thể kết nối đến máy chủ';
+            get().markDisconnected(firstErr);
+          }
+        }
+      }
+    } catch (err: any) {
+      get().markDisconnected(err?.message || 'Không thể kết nối đến máy chủ');
+    } finally {
+      set({ probingPermissions: false });
+    }
   },
 }));

@@ -4,8 +4,22 @@ import (
 	"fmt"
 	goruntime "runtime"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
+
+// getDiskFreeBytes returns available free bytes for the volume containing dirPath.
+func getDiskFreeBytes(dirPath string) uint64 {
+	ptr, err := windows.UTF16PtrFromString(dirPath)
+	if err != nil {
+		return 0
+	}
+	var freeBytesAvailable uint64
+	if err := windows.GetDiskFreeSpaceEx(ptr, &freeBytesAvailable, nil, nil); err != nil {
+		return 0
+	}
+	return freeBytesAvailable
+}
 
 // getWindowsBuildDetails queries the Windows registry to get the exact OS edition,
 // display version (e.g. 24H2), and build number with UBR (e.g. 26100.9974).

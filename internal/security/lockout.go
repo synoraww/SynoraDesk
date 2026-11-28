@@ -1,6 +1,7 @@
 package security
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -133,6 +134,15 @@ func (lm *LockoutManager) loadState() {
 	// 1. Decrypt using Windows DPAPI
 	decrypted, err := Decrypt(raw)
 	if err != nil {
+		// Silent upgrade migration: an earlier build could accidentally seal security_lockout.dat
+		// with SDPASS1 while unlocked, making it unreadable at boot before passcode entry.
+		if bytes.HasPrefix(raw, []byte(passcodeEnvelopeMagic)) {
+			lm.state.IsLockedOut = false
+			lm.state.RemainingLockoutSeconds = 0
+			lm.state.FailedAttempts = 0
+			lm.saveStateLocked()
+			return
+		}
 		// Tampered or invalid DPAPI!
 		// If someone edited the file, penalize with lockout to prevent bypass!
 		lm.state.IsLockedOut = true
@@ -177,8 +187,8 @@ func (lm *LockoutManager) saveStateLocked() {
 		return
 	}
 
-	// Encrypt using DPAPI
-	encrypted, err := Encrypt(data)
+	// Encrypt using system DPAPI/TPM only (must stay readable at boot before unlock)
+	encrypted, err := EncryptSystem(data)
 	if err != nil {
 		return
 	}

@@ -3,8 +3,8 @@ package panel
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,10 +16,12 @@ import (
 
 // Manager handles multi-panel configuration and API client management
 type Manager struct {
+	mu          sync.RWMutex
 	db          *database.DB
 	credentials *security.CredentialStore
 	clientAPIs  map[string]*api.ClientAPI
 	appAPIs     map[string]*api.ApplicationAPI
+	maskedCache map[string]string
 	activePanel string
 }
 
@@ -30,6 +32,7 @@ func NewManager(db *database.DB, credentials *security.CredentialStore) *Manager
 		credentials: credentials,
 		clientAPIs:  make(map[string]*api.ClientAPI),
 		appAPIs:     make(map[string]*api.ApplicationAPI),
+		maskedCache: make(map[string]string),
 	}
 }
 
@@ -40,37 +43,49 @@ func (m *Manager) Initialize() error {
 		return fmt.Errorf("failed to load panels: %w", err)
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	for _, p := range panels {
-		if err := m.initAPIs(p); err != nil {
-			// Log but don't fail - panel might have invalid credentials
-			continue
-		}
 		if p.IsActive {
 			m.activePanel = p.ID
 		}
+		if err := m.initAPIsLocked(p); err != nil {
+			// Log but don't fail - panel might have invalid credentials
+			continue
+		}
+	}
+
+	// If panels exist in DB but none is marked active, auto-activate the first panel
+	if m.activePanel == "" && len(panels) > 0 {
+		m.activePanel = panels[0].ID
+		_ = m.db.SetActivePanel(panels[0].ID)
 	}
 
 	return nil
 }
 
-func (m *Manager) initAPIs(p database.PanelRecord) error {
+func (m *Manager) initAPIsLocked(p database.PanelRecord) error {
+	var firstErr error
 	if p.ClientAPIKey != "" {
 		token, err := m.credentials.DecryptString(p.ClientAPIKey)
 		if err != nil {
-			return fmt.Errorf("failed to decrypt client API key: %w", err)
+			firstErr = fmt.Errorf("failed to decrypt client API key: %w", err)
+		} else {
+			m.clientAPIs[p.ID] = api.NewClientAPI(p.URL, token)
 		}
-		m.clientAPIs[p.ID] = api.NewClientAPI(p.URL, token)
 	}
 
 	if p.AppAPIKey != "" {
 		token, err := m.credentials.DecryptString(p.AppAPIKey)
-		if err != nil {
-			return fmt.Errorf("failed to decrypt app API key: %w", err)
+		if err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("failed to decrypt app API key: %w", err)
+		} else if err == nil {
+			m.appAPIs[p.ID] = api.NewApplicationAPI(p.URL, token)
 		}
-		m.appAPIs[p.ID] = api.NewApplicationAPI(p.URL, token)
 	}
 
-	return nil
+	return firstErr
 }
 
 // AddPanel adds a new panel
@@ -83,10 +98,15 @@ func (m *Manager) AddPanel(input PanelInput) (*Panel, error) {
 	id := uuid.New().String()
 	now := time.Now()
 
+	m.mu.RLock()
+	shouldActivate := m.activePanel == ""
+	m.mu.RUnlock()
+
 	record := database.PanelRecord{
 		ID:        id,
 		Name:      input.Name,
 		URL:       strings.TrimRight(input.URL, "/"),
+		IsActive:  shouldActivate,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -113,9 +133,12 @@ func (m *Manager) AddPanel(input PanelInput) (*Panel, error) {
 	}
 
 	// Initialize API clients
-	if err := m.initAPIs(record); err != nil {
-		// Non-fatal, panel is saved but APIs might not work
+	m.mu.Lock()
+	if record.IsActive {
+		m.activePanel = record.ID
 	}
+	_ = m.initAPIsLocked(record)
+	m.mu.Unlock()
 
 	return m.recordToPanel(record), nil
 }
@@ -157,23 +180,25 @@ func (m *Manager) UpdatePanel(id string, input PanelInput) (*Panel, error) {
 	}
 
 	// Reinitialize API clients
+	m.mu.Lock()
 	delete(m.clientAPIs, id)
 	delete(m.appAPIs, id)
-	if err := m.initAPIs(*existing); err != nil {
-		// Non-fatal
-	}
+	_ = m.initAPIsLocked(*existing)
+	m.mu.Unlock()
 
 	return m.recordToPanel(*existing), nil
 }
 
 // DeletePanel removes a panel
 func (m *Manager) DeletePanel(id string) error {
+	m.mu.Lock()
 	delete(m.clientAPIs, id)
 	delete(m.appAPIs, id)
 
 	if m.activePanel == id {
 		m.activePanel = ""
 	}
+	m.mu.Unlock()
 
 	return m.db.DeletePanel(id)
 }
@@ -183,16 +208,21 @@ func (m *Manager) SetActivePanel(id string) error {
 	if err := m.db.SetActivePanel(id); err != nil {
 		return fmt.Errorf("failed to set active panel: %w", err)
 	}
+	m.mu.Lock()
 	m.activePanel = id
+	m.mu.Unlock()
 	return nil
 }
 
 // GetActivePanel returns the currently active panel
 func (m *Manager) GetActivePanel() (*Panel, error) {
-	if m.activePanel == "" {
+	m.mu.RLock()
+	activeID := m.activePanel
+	m.mu.RUnlock()
+	if activeID == "" {
 		return nil, nil
 	}
-	record, err := m.db.GetPanel(m.activePanel)
+	record, err := m.db.GetPanel(activeID)
 	if err != nil {
 		return nil, err
 	}
@@ -226,8 +256,13 @@ func (m *Manager) TestConnection(id string) (*ConnectionTestResult, error) {
 	result := &ConnectionTestResult{}
 
 	// Test Client API
+	m.mu.RLock()
+	clientAPI, clientOk := m.clientAPIs[id]
+	appAPI, appOk := m.appAPIs[id]
+	m.mu.RUnlock()
+
 	if record.ClientAPIKey != "" {
-		if clientAPI, ok := m.clientAPIs[id]; ok {
+		if clientOk {
 			account, err := clientAPI.GetAccount(ctx)
 			if err != nil {
 				result.ClientError = err.Error()
@@ -246,7 +281,7 @@ func (m *Manager) TestConnection(id string) (*ConnectionTestResult, error) {
 
 	// Test Application API
 	if record.AppAPIKey != "" {
-		if appAPI, ok := m.appAPIs[id]; ok {
+		if appOk {
 			err := appAPI.TestConnection(ctx)
 			if err != nil {
 				result.AppError = err.Error()
@@ -265,6 +300,8 @@ func (m *Manager) TestConnection(id string) (*ConnectionTestResult, error) {
 
 // GetClientAPI returns the Client API for the active panel
 func (m *Manager) GetClientAPI() (*api.ClientAPI, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.activePanel == "" {
 		return nil, fmt.Errorf("no active panel selected")
 	}
@@ -277,6 +314,8 @@ func (m *Manager) GetClientAPI() (*api.ClientAPI, error) {
 
 // GetActivePanelLatencyMs returns the last recorded latency in ms for the active panel
 func (m *Manager) GetActivePanelLatencyMs() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.activePanel == "" {
 		return 0
 	}
@@ -288,6 +327,8 @@ func (m *Manager) GetActivePanelLatencyMs() int64 {
 
 // GetClientAPIForPanel returns the Client API for a specific panel ID
 func (m *Manager) GetClientAPIForPanel(id string) (*api.ClientAPI, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	client, ok := m.clientAPIs[id]
 	if !ok {
 		return nil, fmt.Errorf("client API not initialized for panel %s", id)
@@ -297,6 +338,8 @@ func (m *Manager) GetClientAPIForPanel(id string) (*api.ClientAPI, error) {
 
 // GetAppAPI returns the Application API for the active panel
 func (m *Manager) GetAppAPI() (*api.ApplicationAPI, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.activePanel == "" {
 		return nil, fmt.Errorf("no active panel selected")
 	}
@@ -309,6 +352,8 @@ func (m *Manager) GetAppAPI() (*api.ApplicationAPI, error) {
 
 // GetActivePanelID returns the active panel ID
 func (m *Manager) GetActivePanelID() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.activePanel
 }
 
@@ -325,15 +370,33 @@ func (m *Manager) recordToPanel(r database.PanelRecord) *Panel {
 		UpdatedAt:    r.UpdatedAt,
 	}
 
-	// Provide masked credentials for display
+	// Provide masked credentials for display (cached by ciphertext to avoid repeated TPM/DPAPI calls)
 	if r.ClientAPIKey != "" {
-		if decrypted, err := m.credentials.DecryptString(r.ClientAPIKey); err == nil {
-			p.MaskedClientKey = m.credentials.MaskCredential(decrypted)
+		m.mu.RLock()
+		cached, ok := m.maskedCache[r.ClientAPIKey]
+		m.mu.RUnlock()
+		if ok {
+			p.MaskedClientKey = cached
+		} else if decrypted, err := m.credentials.DecryptString(r.ClientAPIKey); err == nil {
+			masked := m.credentials.MaskCredential(decrypted)
+			m.mu.Lock()
+			m.maskedCache[r.ClientAPIKey] = masked
+			m.mu.Unlock()
+			p.MaskedClientKey = masked
 		}
 	}
 	if r.AppAPIKey != "" {
-		if decrypted, err := m.credentials.DecryptString(r.AppAPIKey); err == nil {
-			p.MaskedAppKey = m.credentials.MaskCredential(decrypted)
+		m.mu.RLock()
+		cached, ok := m.maskedCache[r.AppAPIKey]
+		m.mu.RUnlock()
+		if ok {
+			p.MaskedAppKey = cached
+		} else if decrypted, err := m.credentials.DecryptString(r.AppAPIKey); err == nil {
+			masked := m.credentials.MaskCredential(decrypted)
+			m.mu.Lock()
+			m.maskedCache[r.AppAPIKey] = masked
+			m.mu.Unlock()
+			p.MaskedAppKey = masked
 		}
 	}
 
@@ -341,18 +404,6 @@ func (m *Manager) recordToPanel(r database.PanelRecord) *Panel {
 }
 
 func validatePanelURL(rawURL string) error {
-	if rawURL == "" {
-		return fmt.Errorf("panel URL is required")
-	}
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return fmt.Errorf("invalid panel URL: %w", err)
-	}
-	if parsed.Scheme != "https" && parsed.Scheme != "http" {
-		return fmt.Errorf("panel URL must use http or https scheme")
-	}
-	if parsed.Host == "" {
-		return fmt.Errorf("panel URL must have a host")
-	}
-	return nil
+	_, err := security.ValidateHTTPURL(rawURL, false)
+	return err
 }

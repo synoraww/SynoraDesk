@@ -1,158 +1,77 @@
-# Nhật ký thay đổi
+# Changelog
 
-Tất cả những thay đổi đáng chú ý đối với dự án SynoraDesk (PteroDesk) sẽ được ghi lại trong tệp này.
+All notable changes to **SynoraDesk** are documented in this file.
 
-## [1.0.5A] - 24-11-2026
+## [1.05A] - 2026-11-24
 
-### Sửa lỗi quan trọng (Critical Bug Fixes) & Ổn định hệ thống
-- **Sửa lỗi đen ứng dụng khi bấm vào máy chủ (Server Detail)**: Khắc phục lỗi `ReferenceError` do truy cập hàm dịch thuật `t` trước khi khởi tạo trong `useState`; di chuyển toàn bộ hook lên đầu component và khai báo `server` an toàn.
-- **Bổ sung ErrorBoundary bảo vệ giao diện**: Tích hợp component `ErrorBoundary` bọc ngoài toàn bộ các tab và cửa sổ riêng độc lập, ngăn chặn hoàn toàn hiện tượng sập trắng/đen màn hình khi gặp ngoại lệ render.
-- **Sửa lỗi mất khóa bảo vệ (App Lock) khi gỡ ra cài lại**:
-  - Tự động sao lưu cấu hình khóa đã mã hóa Windows DPAPI (`app_lock`) và loại khóa (`app_lock_type`) vào bảng `settings` trong database SQLite `pterodesk.db`.
-  - Cơ chế tự phục hồi: Khôi phục `app_lock.dat` và `app_lock_enabled` tự động từ database nếu file bị dọn dẹp khi cài đặt lại.
-  - Thêm API backend quản lý tùy chọn bảo mật (`GetSecurityPreferences` & `SetSecurityPreferences`) lưu giữ thiết lập `security_lock_on_launch` và `security_autolock_minutes`.
-  - Tinh chỉnh điều kiện kích hoạt `lockout` khi thiếu file để không ảnh hưởng đến người dùng chưa thiết lập khóa bảo vệ.
-- **Tối ưu Console Viewer & Đa ngôn ngữ (i18n)**:
-  - Tối ưu co giãn tự nhiên nhiều dòng text dài với `word-break: break-all`.
-  - Hoàn thiện bản dịch song ngữ Anh - Việt cho toàn bộ bảng điều khiển máy chủ và Server IDE.
-  - Loại bỏ các module cũ SFTP Client và Database Manager độc lập.
+### Added
+- `ErrorBoundary` wrapper around workspace tabs and detached windows to prevent blank-screen crashes on render errors.
+- Backend security preference endpoints (`GetSecurityPreferences`, `SetSecurityPreferences`) to persist `security_lock_on_launch` and `security_autolock_minutes`.
 
----
+### Changed
+- Improved console log line wrapping (`word-break: break-all`) for long output lines.
+- Completed English and Vietnamese (`en`/`vi`) translations for Server Detail and Server IDE views.
 
-## [1.0.4A] - 22-11-2026
+### Fixed
+- Fixed a `ReferenceError` when opening Server Detail caused by accessing the translation helper before hook initialization.
+- Fixed App Lock settings being lost on reinstall by backing up DPAPI-encrypted `app_lock` and `app_lock_type` in SQLite `settings` and restoring `app_lock.dat` automatically on startup.
+- Refined missing-lockout-file detection so fresh installations without an app lock are not falsely locked out.
 
-### Phát trực tuyến bảng điều khiển hiệu suất cao, Clipboard tệp toàn cầu & Cải tiến IDE
-
-#### Bảo mật & An toàn thông tin (Security Hardening & Full Audit Remediation)
-- **Vá lỗ hổng SYNORA-SEC-001**: Giới hạn và xác thực nghiêm ngặt thư mục tải tệp cục bộ (`DownloadServerFileTo`), ngăn chặn ghi tệp tùy ý vào thư mục Windows Startup hoặc tệp hệ thống.
-- **Vá lỗ hổng SYNORA-SEC-002 & SYNORA-SEC-006**: Áp dụng kiểm tra bảo vệ khóa phiên `checkSessionLock()` trên hơn 40 API endpoints của Go backend; yêu cầu xác thực mật khẩu hiện tại trước khi thay đổi cấu hình khóa.
-- **Vá lỗ hổng SYNORA-SEC-003**: Loại bỏ `dangerouslySetInnerHTML` trong `TwoFactorQRCode.tsx`, ngăn chặn triệt để Stored XSS từ SVG của máy chủ Panel.
-- **Vá lỗ hổng SYNORA-SEC-004**: Loại bỏ `ssh.InsecureIgnoreHostKey()`, triển khai cơ chế Known Hosts (Trust-On-First-Use) chống tấn công Man-in-the-Middle trên kết nối SFTP.
-- **Vá lỗ hổng SYNORA-SEC-005**: Loại bỏ lưu trữ hash mật khẩu dạng rõ trong HTML5 `localStorage`, chuyển toàn bộ logic xác thực và lưu trữ hash bảo vệ bởi Windows DPAPI.
-- **Vá lỗ hổng SYNORA-SEC-007**: Xử lý phòng thủ khi tệp `security_lockout.dat` bị xóa, chống bypass bộ đếm thử lại và tự hủy dữ liệu.
-- **Vá lỗ hổng SYNORA-SEC-008**: Chống DSN Injection và bật mã hóa TLS an toàn khi kết nối MySQL/MariaDB từ xa qua `mysql.Config`.
-- **Vá lỗ hổng SYNORA-SEC-009**: Giới hạn tối đa 5 cửa sổ tách rời (Detached Windows) mở đồng thời, chống cạn kiệt tài nguyên máy tính.
-- **Vá lỗ hổng SYNORA-SEC-010**: Bổ sung `url.QueryEscape` cho tham số tệp và thư mục trong Pterodactyl REST API.
-- **Vá lỗ hổng SYNORA-SEC-011**: Triển khai `RedactingWriter` tự động ẩn trường nhạy cảm trong hệ thống log Zerolog.
-
-#### Đã thêm
-- **Bộ phân tích nhật ký bảng điều khiển hiệu suất cao & Trình phân tích cú pháp ANSI**:
-  - Chuyển sang phân nhóm đầu ra của bảng điều khiển được điều chỉnh phụ trợ (gỡ lỗi 20 mili giây / 256 dòng mỗi lô) để loại bỏ tắc nghẽn IPC trong nhật ký khởi động máy chủ nặng.
-  - Hàng đợi `requestAnimationFrame` giao diện người dùng để ngăn chặn tình trạng đóng băng luồng chính trong quá trình phát trực tuyến bảng điều khiển thông lượng cao.
-  - TrueColor RGB 24 bit đầy đủ (`38;2;r;g;b`) và bảng phân tích cú pháp ANSI 256 màu xterm với tính năng điều chỉnh độ tương phản tự động.
-  - Các dòng nhật ký được tô màu `React.memo` và các lần xuất hiện có khóa duy nhất để hiển thị mượt mà, tức thì.
-  - Hiệu suất cuộn xuống dưới nhanh chóng bỏ qua các truy vấn giới thiệu DOM chậm.
-- **Hệ thống quản lý và bảng tạm tệp toàn cầu (`fileClipboard.ts`)**:
-  - Hỗ trợ clipboard trên toàn hệ thống cho các hành động Sao chép và Cắt tệp/thư mục trên các thư mục và máy chủ.
-  - Tích hợp menu ngữ cảnh và phím tắt trong Trình quản lý tệp và ServerIDE.
-  - Thông báo chúc mừng xác nhận hành động sao chép/cắt/dán.
-- **Các cải tiến của ServerIDE**:
-  - Cây khám phá tệp nhiều tab đầy đủ tính năng với các hành động sao chép, cắt, dán, xóa và sao chép trực tiếp.
-  - Bảo toàn trạng thái biên tập viên Monaco và đồng bộ hóa tập tin từ xa ngay lập tức.
-- **Cập nhật trình cài đặt và điều khoản dịch vụ**:
-  - Trình cài đặt WiX Toolset v7 được cập nhật với các điều khoản EULA được tinh chỉnh khẳng định Zero Telemetry và quyền riêng tư dữ liệu hoàn chỉnh.
+### Removed
+- Removed standalone SFTP Explorer and MySQL Database Manager navigation entry points from the active workspace UI.
 
 ---
 
-## [1.0.3A] - 2026-11-19
+## [1.04A] - 2026-11-22
 
-### Bộ công cụ WiX Đường dẫn trình cài đặt MSI, Chống trùng lặp nhiều tab & Chẩn đoán thời gian chạy
+### Added
+- Batched backend console streaming and `requestAnimationFrame` frontend flushing for high-throughput Wings console logs.
+- Full 24-bit TrueColor RGB and 256-color xterm ANSI parsing with memoized console lines.
+- Global file clipboard (`fileClipboard.ts`) supporting Copy, Cut, and Paste across directories and servers in File Manager and `ServerIDE`.
+- Multi-tab `ServerIDE` file tree and synchronized Monaco editor state.
 
-#### Đã thêm
-- **Gói cài đặt Windows chính thức (`.msi`)**:
-  - Được xây dựng với WiX Toolset v7 (`WixUI_InstallDir`) với kiến ​​trúc Tệp chương trình 64-bit.
-  - Tạo lối tắt cho Desktop và Start Menu.
-  - Hộp kiểm khởi chạy ứng dụng tùy chọn sau khi cài đặt.
-- **Chống trùng lặp nhiều tab và bảo vệ một phiên bản**:
-  - Giao tiếp giữa các tab ngăn chặn các phiên hoạt động trùng lặp và các kết nối WebSocket xung đột.
-- **Phương thức chẩn đoán hệ thống**:
-  - Báo cáo kiểm tra chẩn đoán chi tiết Bản dựng Windows (`CurrentBuild.UBR`), số lõi CPU, phiên bản thời gian chạy Edge WebView2 và trạng thái SQLite WAL.
-- **Đã sửa lỗi lưu trữ dữ liệu ứng dụng**:
-  - Đã di dời dữ liệu người dùng và bộ đệm WebView2 sang `%APPDATA%\SynoraDesk` để ngăn chặn việc khóa thực thi.
+### Security
+- Restricted `DownloadServerFileTo` destination directories to prevent arbitrary writes to system or Windows Startup paths.
+- Enforced `checkSessionLock()` across backend IPC methods and required current passcode verification before changing lock settings.
+- Removed `dangerouslySetInnerHTML` in `TwoFactorQRCode.tsx` to prevent Stored XSS from panel-supplied SVG payloads.
+- Removed plaintext password/hash storage from `localStorage`, moving all passcode verification and storage to Windows DPAPI-protected files.
+- Added tamper detection when `security_lockout.dat` is missing on locked installations.
+- Configured MySQL client TLS (`TLSConfig = "true"`) and structured `mysql.Config` DSN construction.
+- Capped concurrent detached windows at 5 to prevent resource exhaustion.
+- Added `url.QueryEscape` for file and directory query parameters in Pterodactyl REST requests.
+- Added `redactingWriter` in `internal/logger` to redact sensitive fields (`token`, `password`, `key`, `secret`, `authorization`, `credential`, `api_key`, `apikey`) from logs.
 
 ---
 
-## [1.0.2A] - 2026-11-19
+## [1.03A] - 2026-11-19
 
-### Cập nhật lớn: Bảo mật bằng mật mã, Studio hình nền, Điều khiển không khung & Kiến trúc được hỗ trợ bởi AI
+### Added
+- WiX Toolset v7 `.msi` installer pipeline (`installer/wix/Package.wxs` and `installer/wix/build-msi.ps1`).
+- Multi-tab guard (`multiTabGuard.ts`) and single-instance lock (`SingleInstanceLock`) to prevent conflicting sessions.
+- System Diagnostics modal (`GetSystemDiagnostics`) reporting Windows build/UBR, CPU count, WebView2 runtime version, and SQLite WAL status.
 
-#### Đã thêm
-- **Kỹ thuật được hỗ trợ bởi AI**:
-  - Cải tiến, tái cấu trúc và xác minh toàn bộ cơ sở mã được hỗ trợ bởi Google DeepMind AntiGravity / Gemini AI.
-- **Bảo mật bằng mật mã & Khóa chống bạo lực (`internal/security/lockout.go`)**:
-  - Khóa mã PIN (4, 6, 8 chữ số) và bảo vệ mật khẩu văn bản cho ứng dụng.
-  - Cơ chế khóa chống giả mạo đơn điệu gắn với phần cứng: đếm ngược hình phạt vẫn tồn tại khi khởi động lại máy mà không giảm thời gian ngoại tuyến.
-  - Bộ lưu trữ trạng thái được mã hóa (`security_lockout.dat`) sử dụng Windows DPAPI (`CryptProtectData`) cùng với xác minh chữ ký HMAC-SHA256.
-  - Tự động xóa khẩn cấp tự hủy (`WipeAllData`): tự động xóa cơ sở dữ liệu SQLite và tất cả thông tin xác thực đã lưu khi vượt quá số lần thử thất bại tối đa.
-- **Studio hình nền tương tác nâng cao (`WallpaperCustomizerModal.tsx`)**:
-  - Xoay và cắt xén bằng cách kéo chuột trực tiếp để chọn các phần tiêu điểm cụ thể của bất kỳ hình nền nào.
-  - Điều khiển Thu phóng mượt mà (50% đến 350%) với thanh trượt thu phóng, nút +/- và cài đặt trước thu phóng nhanh (100%, 125%, 150%, 200%, 250%).
-  - Lưới căn chỉnh nhanh 9 điểm (Trên cùng bên trái, Giữa, Dưới cùng bên phải, v.v.) với các thanh trượt tọa độ X/Y.
-  - Lớp phủ bố cục theo quy tắc một phần ba với hình chữ thập tiêu điểm trực tiếp.
-  - Các chế độ hiển thị Che và Chứa, với tính năng đồng bộ hóa trực tiếp theo thời gian thực để làm mờ và làm mờ lớp phủ.
-- **Quản lý cửa sổ không khung và duy trì trạng thái cửa sổ**:
-  - Thanh tiêu đề không khung tùy chỉnh với tính năng kéo tự nhiên (`wails-drag` / `--wails-draggable: drag`).
-  - Điều khiển cửa sổ liền mạch: Thu nhỏ (`WindowMinimise`), Tối đa hóa/Khôi phục (`WindowToggleMaximise`) và Thoát (`Quit`).
-  - Tự động lưu trạng thái cửa sổ: tính ổn định của vị trí cửa sổ (X, Y), kích thước (Chiều rộng, Chiều cao) và trạng thái tối đa đã được gỡ bỏ (`window_state.json`).
-  - Tính di động của cửa sổ khi bị khóa: khả năng di chuyển và điều chỉnh cửa sổ một cách liền mạch từ màn hình khóa.
-- **Windows bật ra tách rời (Cửa sổ phụ độc lập)**:
-  - Khả năng đưa bảng điều khiển máy chủ, tab trình soạn thảo IDE của Monaco, trình khám phá SFTP và cơ sở dữ liệu vào các cửa sổ màn hình độc lập.
-  - Tiêu đề có thể kéo tùy chỉnh chuyên dụng với các điều khiển thu nhỏ, phóng to và đóng độc lập cho các cửa sổ tách rời.
-- **Phím nóng thu phóng trình duyệt toàn cầu**:
-  - Hỗ trợ đầy đủ cho việc thu phóng `Ctrl +`, `Ctrl -`, `Ctrl 0` và `Ctrl + Wheel`.
-  - Được áp dụng trực tiếp cho `document.documentElement.style.zoom`, ngăn ngừa biến dạng bố cục và tạo tác viền đen.
-  - Huy hiệu thu phóng HUD nổi với tính ổn định cục bộ trong `localStorage`.
-- **Giao diện người dùng/UX & Bản địa hóa**:
-  - Tự động phát hiện favicon của bảng điều khiển (`/public/favicons/favicon.ico`).
-  - Thiết bị đầu cuối thông minh với khả năng phân tích mã màu ANSI nâng cao.
-  - Độ phân giải hiển thị mã QR 2FA trong cài đặt bảo mật tài khoản.
-  - Quốc tế hóa song ngữ toàn diện (tiếng Việt và tiếng Anh).
+### Fixed
+- Fixed application data and WebView2 cache directory path to `%APPDATA%\SynoraDesk` with automatic migration from legacy `%APPDATA%\PteroDesk` and cleanup of `.exe`-named WebView2 folders.
+
+---
+
+## [1.02A] - 2026-11-19
+
+### Added
+- Cryptographic App Lock (PIN or password) with Argon2 hashing and persistent anti-brute-force `LockoutManager` (`security_lockout.dat` protected by DPAPI + HMAC-SHA256) and optional `WipeAllData`.
+- Wallpaper Customizer Studio (`WallpaperCustomizerModal.tsx`) with zoom, 9-point positioning, blur, opacity, and cover/contain modes.
+- Frameless custom title bar, window geometry persistence (`window_state.json`), and detached standalone windows.
+- Global zoom hotkeys (`Ctrl +`, `Ctrl -`, `Ctrl 0`, `Ctrl + Wheel`) persisted in `localStorage`.
+- Panel favicon detection, 2FA QR code display, and bilingual (`en`/`vi`) i18n support.
 
 ---
 
 ## [1.0.0] - 2026-11-16
 
-### Bản phát hành đầu tiên: Máy khách Windows gốc sẵn sàng sản xuất
-
-#### Đã thêm
-- **Nền tảng cốt lõi**:
-  - Thực thi Windows x64 gốc được cung cấp bởi Wails v2 và Go.
-  - Giao diện người dùng React 19 hiện đại được tạo kiểu bằng Hệ thống thiết kế Meta Astryx và CSS Tailwind.
-  - Cơ sở dữ liệu Pure Go SQLite chạy ở chế độ WAL với quá trình di chuyển tự động.
-  - Mã hóa Windows DPAPI thông qua `crypt32.dll` để lưu trữ thông tin xác thực an toàn.
-  - Trình ghi nhật ký nhiều trình ghi có cấu trúc Zerolog với tính năng chỉnh sửa mã thông báo.
-
-- **Trình quản lý đa bảng**:
-  - Quản lý nhiều bảng Pterodactyl độc lập với thông tin xác thực Ứng dụng và Khách hàng riêng biệt.
-  - Kiểm tra kết nối trực tiếp và phát hiện phiên bản ngữ nghĩa.
-  - Chuyển đổi bảng điều khiển hoạt động với lưu trữ phiên liên tục.
-
-- **Công cụ khám phá và khả năng API**:
-  - Sổ đăng ký được thiết kế ngược bao gồm tất cả các điểm cuối chính thức từ Pterodactyl 1.x và 2.x sắp tới.
-  - Ma trận khả năng động điều chỉnh chế độ xem giao diện người dùng dựa trên các phiên bản bảng điều khiển được phát hiện và phạm vi khóa API đang hoạt động.
-  - Danh mục quyền ACL chính thức dành cho các quyền chi tiết của người dùng phụ.
-
-- **Hoạt động máy chủ & Bảng điều khiển thời gian thực**:
-  - Bảng điều khiển quản lý máy chủ toàn diện với tính năng tìm kiếm, lọc và theo dõi tài nguyên.
-  - Các tín hiệu điều khiển nguồn (`start`, `stop`, `restart`, `kill`) được bảo vệ bằng hộp thoại xác nhận.
-  - Phát trực tuyến Wings WebSocket theo thời gian thực cho nhật ký bảng điều khiển trực tiếp và số liệu tài nguyên dưới giây.
-  - Thanh đầu vào bảng điều khiển tương tác để thực thi lệnh.
-
-- **Trình quản lý tệp động cơ kép & SFTP trực tiếp**:
-  - Được tích hợp trực tiếp bên trong chế độ xem Chi tiết máy chủ.
-  - Chuyển đổi liền mạch giữa API tệp Pterodactyl REST và SFTP tốc độ cao trực tiếp (`pkg/sftp`).
-  - Thông tin đăng nhập kết nối máy chủ được điền sẵn với IP nút và cổng.
-  - Trình chỉnh sửa tệp văn bản tích hợp với chức năng lưu trực tiếp.
-  - Điều hướng thư mục, đường dẫn đường dẫn, tải tệp lên, tạo và xóa thư mục.
-
-- **Quản lý cơ sở dữ liệu & Máy khách MySQL**:
-  - Tạo cơ sở dữ liệu Pterodactyl, xoay mật khẩu và xóa.
-  - Công cụ thực thi truy vấn MySQL/MariaDB tích hợp với lưới kết quả và thời gian thực hiện.
-  - Trình duyệt lược đồ bảng tương tác.
-
-- **Sao lưu và người dùng phụ**:
-  - Bộ sao lưu đầy đủ: tạo bản sao lưu với cách đặt tên tùy chỉnh, bảo vệ khóa/mở khóa, khôi phục, xóa và tải xuống qua các URL được chỉ định.
-  - Quản lý quyền truy cập của người dùng phụ: liệt kê người dùng phụ, mời người dùng bằng các hộp kiểm cấp quyền chi tiết và thu hồi quyền truy cập.
-
-- **Bộ tài liệu**:
-  - Bộ đầy đủ các thông số kỹ thuật và tài liệu kiểm tra.
+### Added
+- Initial Windows x64 desktop application built with Wails v2, Go, and React 19.
+- Pure-Go SQLite database (`modernc.org/sqlite`) with WAL mode and automatic schema migrations.
+- Multi-panel manager with Windows DPAPI credential encryption and connection testing.
+- Pterodactyl API discovery registry and compatibility reporting for 1.x and 2.x panels.
+- Server console (Wings WebSocket), power controls, file manager, backups, databases, allocations, startup, and subuser management.
+- Application API admin views for users, servers, nodes, locations, nests, eggs, allocations, and databases.

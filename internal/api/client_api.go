@@ -11,7 +11,16 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"pterodesk/internal/security"
 )
+
+func serverPath(identifier, suffix string) (string, error) {
+	if err := security.ValidatePathIdentifier(identifier); err != nil {
+		return "", fmt.Errorf("invalid server identifier: %w", err)
+	}
+	return fmt.Sprintf("/servers/%s%s", url.PathEscape(identifier), suffix), nil
+}
 
 // ClientAPI wraps the Pterodactyl Client API (/api/client)
 type ClientAPI struct {
@@ -180,7 +189,10 @@ func (c *ClientAPI) CreateAPIKey(ctx context.Context, description string, allowe
 
 // DeleteAPIKey revokes a client API key
 func (c *ClientAPI) DeleteAPIKey(ctx context.Context, identifier string) error {
-	_, _, err := c.http.Delete(ctx, fmt.Sprintf("/account/api-keys/%s", identifier))
+	if err := security.ValidatePathIdentifier(identifier); err != nil {
+		return fmt.Errorf("invalid api key identifier: %w", err)
+	}
+	_, _, err := c.http.Delete(ctx, fmt.Sprintf("/account/api-keys/%s", url.PathEscape(identifier)))
 	return err
 }
 
@@ -220,13 +232,16 @@ func (c *ClientAPI) CreateSSHKey(ctx context.Context, name, publicKey string) (*
 
 // RemoveSSHKey deletes an SSH key by fingerprint
 func (c *ClientAPI) RemoveSSHKey(ctx context.Context, fingerprint string) error {
+	if err := security.ValidatePathIdentifier(fingerprint); err != nil {
+		return fmt.Errorf("invalid ssh key fingerprint: %w", err)
+	}
 	body := map[string]string{
 		"fingerprint": fingerprint,
 	}
 	_, status, err := c.http.Post(ctx, "/account/ssh-keys/remove", body)
 	if err != nil && (status == 404 || status == 405) {
 		// Fallback to DELETE /account/ssh-keys/{fingerprint}
-		_, _, err = c.http.Delete(ctx, fmt.Sprintf("/account/ssh-keys/%s", fingerprint))
+		_, _, err = c.http.Delete(ctx, fmt.Sprintf("/account/ssh-keys/%s", url.PathEscape(fingerprint)))
 	}
 	return err
 }
@@ -354,7 +369,11 @@ func (c *ClientAPI) ListServers(ctx context.Context) ([]Server, error) {
 
 // GetServer retrieves a specific server by identifier
 func (c *ClientAPI) GetServer(ctx context.Context, identifier string) (*Server, error) {
-	data, _, err := c.http.Get(ctx, fmt.Sprintf("/servers/%s?include=egg,allocations,subusers", identifier))
+	p, err := serverPath(identifier, "?include=egg,allocations,subusers")
+	if err != nil {
+		return nil, err
+	}
+	data, _, err := c.http.Get(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +403,11 @@ func (c *ClientAPI) GetServer(ctx context.Context, identifier string) (*Server, 
 
 // GetServerResources retrieves current resource usage for a server
 func (c *ClientAPI) GetServerResources(ctx context.Context, identifier string) (*ResourceUsage, error) {
-	data, _, err := c.http.Get(ctx, fmt.Sprintf("/servers/%s/resources", identifier))
+	p, err := serverPath(identifier, "/resources")
+	if err != nil {
+		return nil, err
+	}
+	data, _, err := c.http.Get(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -397,8 +420,12 @@ func (c *ClientAPI) GetServerResources(ctx context.Context, identifier string) (
 
 // SendPowerAction sends a power action to a server
 func (c *ClientAPI) SendPowerAction(ctx context.Context, identifier string, signal string) error {
+	p, err := serverPath(identifier, "/power")
+	if err != nil {
+		return err
+	}
 	body := map[string]string{"signal": signal}
-	_, _, err := c.http.Post(ctx, fmt.Sprintf("/servers/%s/power", identifier), body)
+	_, _, err = c.http.Post(ctx, p, body)
 	return err
 }
 
@@ -412,7 +439,11 @@ type WebSocketAuth struct {
 
 // GetWebSocketAuth retrieves WebSocket credentials for console
 func (c *ClientAPI) GetWebSocketAuth(ctx context.Context, identifier string) (*WebSocketAuth, error) {
-	data, _, err := c.http.Get(ctx, fmt.Sprintf("/servers/%s/websocket", identifier))
+	p, err := serverPath(identifier, "/websocket")
+	if err != nil {
+		return nil, err
+	}
+	data, _, err := c.http.Get(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -429,8 +460,11 @@ func (c *ClientAPI) GetWebSocketAuth(ctx context.Context, identifier string) (*W
 
 // ListFiles lists files in a directory
 func (c *ClientAPI) ListFiles(ctx context.Context, identifier, directory string) ([]FileObject, error) {
-	path := fmt.Sprintf("/servers/%s/files/list?directory=%s", identifier, url.QueryEscape(directory))
-	data, _, err := c.http.Get(ctx, path)
+	p, err := serverPath(identifier, fmt.Sprintf("/files/list?directory=%s", url.QueryEscape(directory)))
+	if err != nil {
+		return nil, err
+	}
+	data, _, err := c.http.Get(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +481,11 @@ func (c *ClientAPI) ListFiles(ctx context.Context, identifier, directory string)
 
 // GetFileContents retrieves file contents
 func (c *ClientAPI) GetFileContents(ctx context.Context, identifier, filePath string) (string, error) {
-	data, _, err := c.http.Get(ctx, fmt.Sprintf("/servers/%s/files/contents?file=%s", identifier, url.QueryEscape(filePath)))
+	p, err := serverPath(identifier, fmt.Sprintf("/files/contents?file=%s", url.QueryEscape(filePath)))
+	if err != nil {
+		return "", err
+	}
+	data, _, err := c.http.Get(ctx, p)
 	if err != nil {
 		return "", err
 	}
@@ -456,36 +494,54 @@ func (c *ClientAPI) GetFileContents(ctx context.Context, identifier, filePath st
 
 // WriteFile writes content to a file
 func (c *ClientAPI) WriteFile(ctx context.Context, identifier, filePath, content string) error {
-	path := fmt.Sprintf("/servers/%s/files/write?file=%s", identifier, url.QueryEscape(filePath))
-	_, _, err := c.http.Post(ctx, path, content)
+	p, err := serverPath(identifier, fmt.Sprintf("/files/write?file=%s", url.QueryEscape(filePath)))
+	if err != nil {
+		return err
+	}
+	_, _, err = c.http.Post(ctx, p, content)
 	return err
 }
 
 // CreateFile creates a new file
 func (c *ClientAPI) CreateFile(ctx context.Context, identifier, root, name string) error {
+	p, err := serverPath(identifier, "/files/create-folder")
+	if err != nil {
+		return err
+	}
 	body := map[string]string{"root": root, "name": name}
-	_, _, err := c.http.Post(ctx, fmt.Sprintf("/servers/%s/files/create-folder", identifier), body)
+	_, _, err = c.http.Post(ctx, p, body)
 	return err
 }
 
 // DeleteFiles deletes files/folders
 func (c *ClientAPI) DeleteFiles(ctx context.Context, identifier, root string, files []string) error {
+	p, err := serverPath(identifier, "/files/delete")
+	if err != nil {
+		return err
+	}
 	body := map[string]interface{}{"root": root, "files": files}
-	_, _, err := c.http.Post(ctx, fmt.Sprintf("/servers/%s/files/delete", identifier), body)
+	_, _, err = c.http.Post(ctx, p, body)
 	return err
 }
 
 // RenameFile renames a file
 func (c *ClientAPI) RenameFile(ctx context.Context, identifier, root string, files []map[string]string) error {
+	p, err := serverPath(identifier, "/files/rename")
+	if err != nil {
+		return err
+	}
 	body := map[string]interface{}{"root": root, "files": files}
-	_, _, err := c.http.Put(ctx, fmt.Sprintf("/servers/%s/files/rename", identifier), body)
+	_, _, err = c.http.Put(ctx, p, body)
 	return err
 }
 
 // GetFileDownloadURL retrieves a temporary presigned download URL for a file
 func (c *ClientAPI) GetFileDownloadURL(ctx context.Context, identifier, filePath string) (string, error) {
-	path := fmt.Sprintf("/servers/%s/files/download?file=%s", identifier, url.QueryEscape(filePath))
-	data, _, err := c.http.Get(ctx, path)
+	p, err := serverPath(identifier, fmt.Sprintf("/files/download?file=%s", url.QueryEscape(filePath)))
+	if err != nil {
+		return "", err
+	}
+	data, _, err := c.http.Get(ctx, p)
 	if err != nil {
 		return "", err
 	}
@@ -502,8 +558,11 @@ func (c *ClientAPI) GetFileDownloadURL(ctx context.Context, identifier, filePath
 
 // GetFileUploadURL retrieves a presigned upload URL from Wings for file uploads
 func (c *ClientAPI) GetFileUploadURL(ctx context.Context, identifier string) (string, error) {
-	path := fmt.Sprintf("/servers/%s/files/upload", identifier)
-	data, _, err := c.http.Get(ctx, path)
+	p, err := serverPath(identifier, "/files/upload")
+	if err != nil {
+		return "", err
+	}
+	data, _, err := c.http.Get(ctx, p)
 	if err != nil {
 		return "", err
 	}
@@ -584,14 +643,17 @@ func (c *ClientAPI) UploadFileDirect(ctx context.Context, identifier, directory,
 		return fmt.Errorf("failed to get upload URL: %w", err)
 	}
 
-	targetURL := uploadURL
+	parsedUpload, err := security.ValidateHTTPURL(uploadURL, false)
+	if err != nil {
+		return fmt.Errorf("unsafe upload URL: %w", err)
+	}
+
+	targetURL := parsedUpload.String()
 	if directory != "" && directory != "/" {
-		if parsed, err := url.Parse(uploadURL); err == nil {
-			q := parsed.Query()
-			q.Set("directory", directory)
-			parsed.RawQuery = q.Encode()
-			targetURL = parsed.String()
-		}
+		q := parsedUpload.Query()
+		q.Set("directory", directory)
+		parsedUpload.RawQuery = q.Encode()
+		targetURL = parsedUpload.String()
 	}
 
 	var buf bytes.Buffer
@@ -613,7 +675,19 @@ func (c *ClientAPI) UploadFileDirect(ctx context.Context, identifier, directory,
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	httpClient := &http.Client{Timeout: 60 * time.Second}
+	httpClient := &http.Client{
+		Timeout: 60 * time.Second,
+		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return fmt.Errorf("too many redirects")
+			}
+			if len(via) > 0 && strings.EqualFold(via[0].URL.Scheme, "https") && !strings.EqualFold(r.URL.Scheme, "https") {
+				return fmt.Errorf("refusing HTTPS downgrade redirect")
+			}
+			_, err := security.ValidateHTTPURL(r.URL.String(), false)
+			return err
+		},
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("file upload request failed: %w", err)
@@ -621,7 +695,7 @@ func (c *ClientAPI) UploadFileDirect(ctx context.Context, identifier, directory,
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		return fmt.Errorf("upload returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -845,7 +919,14 @@ func (c *ClientAPI) CreateBackupWithOptions(ctx context.Context, identifier, nam
 
 // GetBackupDownloadURL retrieves a signed temporary download URL for a backup
 func (c *ClientAPI) GetBackupDownloadURL(ctx context.Context, identifier, backupUUID string) (string, error) {
-	data, _, err := c.http.Get(ctx, fmt.Sprintf("/servers/%s/backups/%s/download", identifier, backupUUID))
+	if err := security.ValidatePathIdentifier(backupUUID); err != nil {
+		return "", fmt.Errorf("invalid backup uuid: %w", err)
+	}
+	p, err := serverPath(identifier, fmt.Sprintf("/backups/%s/download", url.PathEscape(backupUUID)))
+	if err != nil {
+		return "", err
+	}
+	data, _, err := c.http.Get(ctx, p)
 	if err != nil {
 		return "", err
 	}
@@ -882,7 +963,14 @@ func (c *ClientAPI) RestoreBackup(ctx context.Context, identifier, backupUUID st
 
 // DeleteBackup deletes a backup
 func (c *ClientAPI) DeleteBackup(ctx context.Context, identifier, backupUUID string) error {
-	_, _, err := c.http.Delete(ctx, fmt.Sprintf("/servers/%s/backups/%s", identifier, backupUUID))
+	if err := security.ValidatePathIdentifier(backupUUID); err != nil {
+		return fmt.Errorf("invalid backup uuid: %w", err)
+	}
+	p, err := serverPath(identifier, fmt.Sprintf("/backups/%s", url.PathEscape(backupUUID)))
+	if err != nil {
+		return err
+	}
+	_, _, err = c.http.Delete(ctx, p)
 	return err
 }
 
@@ -940,7 +1028,14 @@ func (c *ClientAPI) UpdateSubuser(ctx context.Context, identifier, subuserUUID s
 
 // DeleteSubuser revokes access for a subuser
 func (c *ClientAPI) DeleteSubuser(ctx context.Context, identifier, subuserUUID string) error {
-	_, _, err := c.http.Delete(ctx, fmt.Sprintf("/servers/%s/users/%s", identifier, subuserUUID))
+	if err := security.ValidatePathIdentifier(subuserUUID); err != nil {
+		return fmt.Errorf("invalid subuser uuid: %w", err)
+	}
+	p, err := serverPath(identifier, fmt.Sprintf("/users/%s", url.PathEscape(subuserUUID)))
+	if err != nil {
+		return err
+	}
+	_, _, err = c.http.Delete(ctx, p)
 	return err
 }
 

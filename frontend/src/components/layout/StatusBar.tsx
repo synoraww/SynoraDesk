@@ -7,11 +7,18 @@ import { useI18n } from '../../i18n';
 import { SystemDiagnosticsModal } from '../common/SystemDiagnosticsModal';
 
 export const StatusBar: React.FC = () => {
-  const { activePanel, panelPingMs } = usePanelStore();
+  const { activePanel, panelPingMs, connectionStatus, connectionError, adminPermissions } = usePanelStore();
   const { servers, dashboardStats } = useServerStore();
   const isLocked = useSecurityStore((s) => s.isLocked);
   const { t } = useI18n();
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
+
+  const panelPerms = activePanel ? adminPermissions[activePanel.id] : undefined;
+  const hasReadableAppApi = Boolean(
+    activePanel?.hasAppKey &&
+      panelPerms &&
+      Object.values(panelPerms).some((p) => p.allowed)
+  );
 
   const totalServers = servers.length;
   const runningServers = dashboardStats?.runningServers ?? 0;
@@ -41,19 +48,53 @@ export const StatusBar: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           {activePanel ? (
             <>
-              <Wifi size={12} color="var(--color-success)" />
+              {connectionStatus === 'disconnected' ? (
+                <WifiOff size={12} color="var(--color-error)" />
+              ) : (
+                <Wifi size={12} color={connectionStatus === 'connected' ? 'var(--color-success)' : 'var(--color-text-muted)'} />
+              )}
               <span style={{ color: 'var(--color-text-secondary)' }}>
                 {activePanel.name}
               </span>
+              {connectionStatus === 'disconnected' && (
+                <span
+                  title={connectionError || 'Không thể kết nối đến máy chủ'}
+                  style={{
+                    color: 'var(--color-error)',
+                    backgroundColor: 'var(--color-error-bg)',
+                    padding: '1px 6px',
+                    borderRadius: '3px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Không thể kết nối
+                </span>
+              )}
               <span style={{ color: 'var(--color-border)' }}>|</span>
               <span style={{ color: 'var(--color-text-muted)' }}>
                 {activePanel.hasClientKey ? t('layout.clientApi') : t('layout.noClientKey')}
               </span>
               {activePanel.hasAppKey && (
                 <span
+                  title={
+                    hasReadableAppApi
+                      ? t('admin.appApiReadable')
+                      : panelPerms
+                      ? t('admin.appApiUnreadable')
+                      : t('admin.checking')
+                  }
                   style={{
-                    backgroundColor: 'var(--color-primary-muted)',
-                    color: 'var(--color-primary-light)',
+                    backgroundColor: hasReadableAppApi
+                      ? 'rgba(34, 197, 94, 0.15)'
+                      : panelPerms
+                      ? 'var(--color-error-bg)'
+                      : 'var(--color-surface-elevated)',
+                    color: hasReadableAppApi
+                      ? 'var(--color-success)'
+                      : panelPerms
+                      ? 'var(--color-error)'
+                      : 'var(--color-text-muted)',
                     padding: '1px 4px',
                     borderRadius: '3px',
                     fontSize: '9px',
@@ -63,7 +104,7 @@ export const StatusBar: React.FC = () => {
                   APP API
                 </span>
               )}
-              {panelPingMs !== null && !isLocked && (
+              {connectionStatus !== 'disconnected' && panelPingMs !== null && !isLocked && (
                 <span
                   title={`${t('ping.latency') || 'Độ trễ Panel'}: ${panelPingMs} ms`}
                   style={{

@@ -10,7 +10,18 @@ export type WorkspaceTabType =
   | 'activities'
   | 'apikeys'
   | 'eggs'
-  | 'ide';
+  | 'ide'
+  | 'admin-overview'
+  | 'admin-users'
+  | 'admin-servers'
+  | 'admin-nodes'
+  | 'admin-locations'
+  | 'admin-nests'
+  | 'admin-eggs'
+  | 'admin-allocations'
+  | 'admin-databases'
+  | 'admin-panel-settings'
+  | 'admin-api-settings';
 
 export interface WorkspaceTab {
   id: string;
@@ -23,6 +34,7 @@ export interface WorkspaceTab {
   serverSubTab?: string;
   filePath?: string;
   isDirty?: boolean;
+  targetEntityId?: number;
 }
 
 interface WorkspaceState {
@@ -91,9 +103,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
             );
           }
 
-          // Case 3: Same singleton view (dashboard, settings, nodes, activities, apikeys)
+          // Case 3: Same singleton view (dashboard, settings, nodes, activities, apikeys, admin-*)
           if (
-            ['dashboard', 'settings', 'nodes', 'activities', 'apikeys'].includes(tabInput.type)
+            [
+              'dashboard',
+              'settings',
+              'nodes',
+              'activities',
+              'apikeys',
+              'admin-overview',
+              'admin-users',
+              'admin-servers',
+              'admin-nodes',
+              'admin-locations',
+              'admin-nests',
+              'admin-eggs',
+              'admin-allocations',
+              'admin-databases',
+              'admin-panel-settings',
+              'admin-api-settings',
+            ].includes(tabInput.type)
           ) {
             return t.type === tabInput.type && (t.panelId === targetPanelId || !t.panelId || !targetPanelId);
           }
@@ -146,7 +175,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
     // Update the active tab in-place (keeps the tab session completely independent)
     navigateCurrentTab: (updates) => {
       const { activeTabId } = get();
-      get().updateTab(activeTabId, updates);
+      get().updateTab(activeTabId, { targetEntityId: undefined, ...updates });
     },
 
     closeTab: (tabId) => {

@@ -973,7 +973,11 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     if (app) {
       try {
         const url = await app.GetBackupDownloadURL(identifier, backupUUID);
-        window.open(url, '_blank');
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+          throw new Error('Invalid download URL scheme');
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
         addNotification({ type: 'success', title: t('serverDetail.downloadInitialized'), message: t('serverDetail.signedUrlOpened') });
       } catch (err: any) {
         addNotification({ type: 'error', title: t('serverDetail.downloadUrlFailed'), message: err.message });
@@ -1452,7 +1456,11 @@ export const ServerDetail: React.FC<ServerDetailProps> = ({
     if (app) {
       try {
         const url = await app.GetFileDownloadURL(identifier, fullPath);
-        window.open(url, '_blank');
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+          throw new Error('Invalid download URL scheme');
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
         addNotification({ type: 'success', title: t('serverDetail.downloadStarted'), message: t('serverDetail.downloadingFile', { name: fileName }) });
       } catch (err: any) {
         addNotification({ type: 'error', title: t('serverDetail.downloadFailedGeneric'), message: err.message });

@@ -9,6 +9,80 @@ import {security} from '../models';
 
 export function AddPanel(arg1:panel.PanelInput):Promise<panel.Panel>;
 
+export function AdminCheckNodeHealth(arg1:number):Promise<api.NodeHealthStatus>;
+
+export function AdminCheckNodesHealth():Promise<Record<number, api.NodeHealthStatus>>;
+
+export function AdminCreateLocation(arg1:api.CreateLocationRequest):Promise<api.Location>;
+
+export function AdminCreateNodeAllocations(arg1:number,arg2:api.CreateAllocationRequest):Promise<void>;
+
+export function AdminCreateServer(arg1:api.CreateServerRequest):Promise<api.AppServer>;
+
+export function AdminCreateServerDatabase(arg1:number,arg2:api.CreateAppDatabaseRequest):Promise<api.AppDatabase>;
+
+export function AdminCreateUser(arg1:api.CreateUserRequest):Promise<api.User>;
+
+export function AdminDeleteLocation(arg1:number):Promise<void>;
+
+export function AdminDeleteNodeAllocation(arg1:number,arg2:number):Promise<void>;
+
+export function AdminDeleteServer(arg1:number,arg2:boolean):Promise<void>;
+
+export function AdminDeleteServerDatabase(arg1:number,arg2:number):Promise<void>;
+
+export function AdminDeleteUser(arg1:number):Promise<void>;
+
+export function AdminGetEgg(arg1:number,arg2:number):Promise<api.Egg>;
+
+export function AdminGetLocation(arg1:number):Promise<api.Location>;
+
+export function AdminGetNodeConfiguration(arg1:number):Promise<api.NodeConfiguration>;
+
+export function AdminGetServer(arg1:number):Promise<api.AppServer>;
+
+export function AdminGetServerDatabase(arg1:number,arg2:number,arg3:boolean):Promise<api.AppDatabase>;
+
+export function AdminGetUser(arg1:number):Promise<api.User>;
+
+export function AdminListEggs(arg1:number,arg2:api.ListOptions):Promise<api.PaginatedResult_pterodesk_internal_api_Egg_>;
+
+export function AdminListLocations(arg1:api.ListOptions):Promise<api.PaginatedResult_pterodesk_internal_api_Location_>;
+
+export function AdminListNests(arg1:api.ListOptions):Promise<api.PaginatedResult_pterodesk_internal_api_Nest_>;
+
+export function AdminListNodeAllocations(arg1:number,arg2:api.ListOptions):Promise<api.PaginatedResult_pterodesk_internal_api_NodeAllocation_>;
+
+export function AdminListNodes(arg1:api.ListOptions):Promise<api.PaginatedResult_pterodesk_internal_api_Node_>;
+
+export function AdminListServerDatabases(arg1:number,arg2:api.ListOptions):Promise<api.PaginatedResult_pterodesk_internal_api_AppDatabase_>;
+
+export function AdminListServers(arg1:api.ListOptions):Promise<api.PaginatedResult_pterodesk_internal_api_AppServer_>;
+
+export function AdminListUsers(arg1:api.ListOptions):Promise<api.PaginatedResult_pterodesk_internal_api_User_>;
+
+export function AdminProbePermissions():Promise<Record<string, api.PermissionProbeStatus>>;
+
+export function AdminReinstallServer(arg1:number):Promise<void>;
+
+export function AdminResetServerDatabasePassword(arg1:number,arg2:number):Promise<void>;
+
+export function AdminSuspendServer(arg1:number):Promise<void>;
+
+export function AdminUnsuspendServer(arg1:number):Promise<void>;
+
+export function AdminUpdateLocation(arg1:number,arg2:api.CreateLocationRequest):Promise<api.Location>;
+
+export function AdminUpdateNode(arg1:number,arg2:api.CreateNodeRequest):Promise<api.Node>;
+
+export function AdminUpdateServerBuild(arg1:number,arg2:api.UpdateServerBuildRequest):Promise<api.AppServer>;
+
+export function AdminUpdateServerDetails(arg1:number,arg2:api.UpdateServerDetailsRequest):Promise<api.AppServer>;
+
+export function AdminUpdateServerStartup(arg1:number,arg2:api.UpdateServerStartupRequest):Promise<api.AppServer>;
+
+export function AdminUpdateUser(arg1:number,arg2:api.UpdateUserRequest):Promise<api.User>;
+
 export function AssignServerAllocation(arg1:string):Promise<api.Allocation>;
 
 export function CheckGitHubUpdates(arg1:boolean):Promise<main.GitHubReleaseInfo>;
@@ -36,6 +110,18 @@ export function CreateNode(arg1:api.CreateNodeRequest):Promise<api.Node>;
 export function CreateSchedule(arg1:string,arg2:string,arg3:api.CronExpression,arg4:boolean,arg5:boolean):Promise<api.Schedule>;
 
 export function CreateSubuser(arg1:string,arg2:string,arg3:Array<string>):Promise<api.Subuser>;
+
+export function DebugRunGC():Promise<string>;
+
+export function DebugRunWALCheckpoint():Promise<string>;
+
+export function DebugSetLogLevel(arg1:boolean):Promise<void>;
+
+export function DebugSetTPMEnabled(arg1:boolean):Promise<void>;
+
+export function DebugTestCryptoRoundtrip():Promise<string>;
+
+export function DebugToggleDBConnection(arg1:boolean):Promise<string>;
 
 export function DecompressFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
@@ -84,6 +170,8 @@ export function GetCurrentAccount():Promise<api.Account>;
 export function GetCustomBackground():Promise<main.CustomBackgroundInfo>;
 
 export function GetDashboardStats():Promise<panel.DashboardStats>;
+
+export function GetDebugStatus():Promise<main.DebugStatus>;
 
 export function GetDetachedModeInfo():Promise<main.DetachedWindowConfig>;
 
@@ -180,6 +268,8 @@ export function RenameServer(arg1:string,arg2:string,arg3:string):Promise<void>;
 export function RestartApp():Promise<void>;
 
 export function RestoreBackup(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
+export function RunPanelConnectivityCheck():Promise<main.PanelConnectivityDiagnostics>;
 
 export function SaveCustomBackgroundSettings(arg1:number,arg2:number,arg3:number,arg4:number,arg5:number,arg6:string):Promise<void>;
 

@@ -692,7 +692,15 @@ export const ServerIDE: React.FC<ServerIDEProps> = ({
         }
       } else if (app?.GetFileDownloadURL) {
         const url = await app.GetFileDownloadURL(serverIdentifier, filePath);
-        window.open(url, '_blank');
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+            throw new Error('Invalid download URL scheme');
+          }
+        } catch {
+          throw new Error('Invalid download URL');
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
         addNotification({
           type: 'success',
           title: t('serverIDE.downloadSuccess'),

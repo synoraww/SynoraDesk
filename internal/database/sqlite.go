@@ -26,6 +26,59 @@ func (d *DB) GetSQLiteVersion() (string, error) {
 	return version, err
 }
 
+// CheckIntegrity runs PRAGMA quick_check and PRAGMA journal_mode on the SQLite database.
+func (d *DB) CheckIntegrity() (integrity string, journalMode string) {
+	if d.conn == nil {
+		return "database not initialized", "unknown"
+	}
+	if err := d.conn.QueryRow("PRAGMA quick_check").Scan(&integrity); err != nil {
+		integrity = err.Error()
+	}
+	if err := d.conn.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		journalMode = "unknown"
+	}
+	return integrity, journalMode
+}
+
+// Ping verifies the SQLite database connection is alive.
+func (d *DB) Ping() error {
+	if d.conn == nil {
+		return fmt.Errorf("database connection is nil")
+	}
+	return d.conn.Ping()
+}
+
+// WALCheckpoint flushes the WAL file back into the main SQLite database.
+func (d *DB) WALCheckpoint() error {
+	if d.conn == nil {
+		return fmt.Errorf("database connection is nil")
+	}
+	_, err := d.conn.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	return err
+}
+
+// GetRecentFailedActivities retrieves recent failed/error activity records.
+func (d *DB) GetRecentFailedActivities(limit int) ([]ActivityRecord, error) {
+	if d.conn == nil {
+		return nil, fmt.Errorf("database connection is nil")
+	}
+	rows, err := d.conn.Query(`SELECT id, panel_id, panel_name, server_id, action, result, error, timestamp FROM activities WHERE result IN ('failed', 'error') ORDER BY timestamp DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var activities []ActivityRecord
+	for rows.Next() {
+		var a ActivityRecord
+		if err := rows.Scan(&a.ID, &a.PanelID, &a.PanelName, &a.ServerID, &a.Action, &a.Result, &a.Error, &a.Timestamp); err != nil {
+			return nil, err
+		}
+		activities = append(activities, a)
+	}
+	return activities, nil
+}
+
 // PanelRecord represents a stored panel configuration
 type PanelRecord struct {
 	ID           string    `json:"id"`

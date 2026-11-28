@@ -102,7 +102,14 @@ export const SecuritySettingsCard: React.FC = () => {
 
     const ok = await setupLock(selectedType, inputPasscode, currentPasscode);
     if (!ok) {
-      setErrorMsg('Không thể thay đổi khóa. Kiểm tra mật mã hiện tại hoặc trạng thái khóa.');
+      const { lastError, isLockedOut: lockedOut } = useSecurityStore.getState();
+      if (lockedOut || lastError?.includes('locked out')) {
+        setErrorMsg(t('security.lockedOutInputBlockedDesc') || 'Ứng dụng đang bị tạm khóa do nhập sai nhiều lần. Vui lòng đợi hết thời gian đếm ngược.');
+      } else if (lastError?.includes('invalid current passcode')) {
+        setErrorMsg(t('security.incorrectCurrentPasscode') || 'Mật mã hiện tại không đúng');
+      } else {
+        setErrorMsg(lastError || 'Không thể thay đổi khóa. Kiểm tra mật mã hiện tại hoặc trạng thái khóa.');
+      }
       return;
     }
     setIsModalOpen(false);
@@ -569,8 +576,26 @@ export const SecuritySettingsCard: React.FC = () => {
                 <>
                   {lockType !== 'none' && (
                     <div>
-                      <label>Mật mã hiện tại:</label>
-                      <input type="password" value={currentPasscode} onChange={(e) => setCurrentPasscode(e.target.value)} required />
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                        Mật mã hiện tại:
+                      </label>
+                      <input
+                        type={showPass ? 'text' : 'password'}
+                        value={currentPasscode}
+                        onChange={(e) => setCurrentPasscode(e.target.value)}
+                        required
+                        placeholder="Nhập mật mã hiện tại"
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          backgroundColor: 'var(--color-surface-hover)',
+                          border: '1px solid var(--color-border)',
+                          color: 'var(--color-text)',
+                          fontSize: '14px',
+                          boxSizing: 'border-box',
+                        }}
+                      />
                     </div>
                   )}
                   <div>

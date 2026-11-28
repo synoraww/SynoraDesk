@@ -32,13 +32,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onOpenPanelModal,
   onSelectServer,
 }) => {
-  const { panels, activePanel } = usePanelStore();
+  const { panels, activePanel, connectionStatus, connectionError, checkPanelPing } = usePanelStore();
   const { t } = useI18n();
   const {
     servers,
     dashboardStats,
     resources,
     loading: serversLoading,
+    error: serversError,
     fetchServers,
     fetchDashboardStats,
     fetchResources,
@@ -54,7 +55,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       fetchDashboardStats();
       loadActivitiesAndRecent();
     }
-  }, [activePanel?.id]);
+  }, [activePanel?.id, activePanel?.hasClientKey, activePanel?.hasAppKey]);
 
   useEffect(() => {
     if (servers.length > 0) {
@@ -129,21 +130,42 @@ export const Dashboard: React.FC<DashboardProps> = ({
           >
             {t('dashboard.title')}
             <span
+              title={connectionStatus === 'disconnected' ? (connectionError || 'Không thể kết nối đến máy chủ') : undefined}
               style={{
                 fontSize: '12px',
                 fontWeight: 500,
                 padding: '2px 8px',
                 borderRadius: '9999px',
-                backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                color: 'var(--color-success)',
-                border: '1px solid rgba(34, 197, 94, 0.2)',
+                backgroundColor:
+                  connectionStatus === 'disconnected'
+                    ? 'rgba(239, 68, 68, 0.12)'
+                    : !activePanel.hasClientKey
+                    ? 'rgba(245, 158, 11, 0.12)'
+                    : 'rgba(34, 197, 94, 0.1)',
+                color:
+                  connectionStatus === 'disconnected'
+                    ? 'var(--color-error)'
+                    : !activePanel.hasClientKey
+                    ? 'var(--color-warning)'
+                    : 'var(--color-success)',
+                border: `1px solid ${
+                  connectionStatus === 'disconnected'
+                    ? 'rgba(239, 68, 68, 0.25)'
+                    : !activePanel.hasClientKey
+                    ? 'rgba(245, 158, 11, 0.25)'
+                    : 'rgba(34, 197, 94, 0.2)'
+                }`,
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
               }}
             >
               <PanelFavicon url={activePanel.url} name={activePanel.name} size={14} />
-              {t('dashboard.connectedTo', { name: activePanel.name })}
+              {connectionStatus === 'disconnected'
+                ? `Không thể kết nối đến máy chủ: ${activePanel.name}`
+                : !activePanel.hasClientKey
+                ? `${activePanel.name} (Chưa có Client API)`
+                : t('dashboard.connectedTo', { name: activePanel.name })}
             </span>
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>

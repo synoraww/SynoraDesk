@@ -58,11 +58,14 @@ export const WorkspaceTabBar: React.FC = () => {
 
   const handleNewTab = (e: React.MouseEvent) => {
     e.stopPropagation();
-    openTab({
-      title: 'SynoraDesk',
-      iconType: 'folder',
-      type: 'dashboard',
-    });
+    openTab(
+      {
+        title: 'SynoraDesk',
+        iconType: 'folder',
+        type: 'dashboard',
+      },
+      true
+    );
   };
 
   const handleWheel = (e: React.WheelEvent) => {

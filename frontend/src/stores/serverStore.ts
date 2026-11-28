@@ -81,6 +81,7 @@ interface ServerState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setSearchQuery: (query: string) => void;
+  resetPanelData: () => void;
 
   // Async actions
   fetchServers: () => Promise<void>;
@@ -113,8 +114,28 @@ export const useServerStore = create<ServerState>((set, get) => ({
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  resetPanelData: () =>
+    set({
+      servers: [],
+      selectedServer: null,
+      resources: {},
+      dashboardStats: null,
+      error: null,
+      loading: false,
+    }),
 
   fetchServers: async () => {
+    const active = usePanelStore.getState().activePanel;
+    if (!active || !active.hasClientKey) {
+      set({
+        servers: [],
+        selectedServer: null,
+        resources: {},
+        error: null,
+        loading: false,
+      });
+      return;
+    }
     set({ loading: true, error: null });
     const start = performance.now();
     try {
@@ -122,11 +143,17 @@ export const useServerStore = create<ServerState>((set, get) => ({
       const servers = await app.ListServers();
       const elapsed = performance.now() - start;
       usePanelStore.getState().recordLatency(elapsed);
-      set({ servers: servers || [], loading: false });
+      set({ servers: servers || [], loading: false, error: null });
     } catch (err: any) {
-      const elapsed = performance.now() - start;
-      usePanelStore.getState().recordLatency(elapsed);
-      set({ error: err.message || 'Failed to fetch servers', loading: false });
+      const msg = err?.message || String(err) || 'Không thể kết nối đến máy chủ';
+      usePanelStore.getState().markDisconnected(msg);
+      set({
+        servers: [],
+        selectedServer: null,
+        resources: {},
+        error: msg,
+        loading: false,
+      });
     }
   },
 
@@ -137,9 +164,11 @@ export const useServerStore = create<ServerState>((set, get) => ({
       const server = await app.GetServer(identifier);
       const elapsed = performance.now() - start;
       usePanelStore.getState().recordLatency(elapsed);
-      set({ selectedServer: server });
+      set({ selectedServer: server, error: null });
     } catch (err: any) {
-      set({ error: err.message || 'Failed to fetch server' });
+      const msg = err?.message || String(err) || 'Không thể kết nối đến máy chủ';
+      usePanelStore.getState().markDisconnected(msg);
+      set({ error: msg });
     }
   },
 
@@ -161,15 +190,24 @@ export const useServerStore = create<ServerState>((set, get) => ({
   },
 
   fetchDashboardStats: async () => {
+    const active = usePanelStore.getState().activePanel;
+    if (!active) {
+      set({ dashboardStats: null });
+      return;
+    }
     const start = performance.now();
     try {
       const app = getWailsBindings();
       const stats = await app.GetDashboardStats();
       const elapsed = performance.now() - start;
-      usePanelStore.getState().recordLatency(elapsed);
+      if (active.hasClientKey) {
+        usePanelStore.getState().recordLatency(elapsed);
+      }
       set({ dashboardStats: stats });
     } catch (err: any) {
-      set({ error: err.message || 'Failed to fetch dashboard stats' });
+      const msg = err?.message || String(err) || 'Không thể kết nối đến máy chủ';
+      usePanelStore.getState().markDisconnected(msg);
+      set({ dashboardStats: null, error: msg });
     }
   },
 }));
