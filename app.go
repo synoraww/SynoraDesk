@@ -67,6 +67,13 @@ type App struct {
 	detachedMu        sync.Mutex
 	detachedCount     int
 	appStartTime      time.Time
+	startupDone       chan struct{}
+}
+
+func (a *App) waitForStartup() {
+	if a.startupDone != nil {
+		<-a.startupDone
+	}
 }
 
 // NewApp creates a new App instance
@@ -78,6 +85,14 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.appStartTime = time.Now()
+	defer func() {
+		if a.startupDone != nil {
+			close(a.startupDone)
+		}
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "app:ready")
+		}
+	}()
 
 	// Determine fixed app data directory (persists across renames and releases)
 	a.appDataDir = GetFixedAppDataDir()
@@ -509,6 +524,7 @@ func (a *App) SetLockConfig(enabled bool, lockType string, passcode string, curr
 }
 
 func (a *App) GetLockType() string {
+	a.waitForStartup()
 	a.sessionMu.RLock()
 	defer a.sessionMu.RUnlock()
 	if !a.lockConfigEnabled {
@@ -540,6 +556,7 @@ func (a *App) LockSession() {
 
 // IsSessionLocked returns whether session lock is active and locked
 func (a *App) IsSessionLocked() bool {
+	a.waitForStartup()
 	a.sessionMu.RLock()
 	defer a.sessionMu.RUnlock()
 	return a.lockConfigEnabled && a.sessionLocked
@@ -578,6 +595,9 @@ func (a *App) UnlockSession(passcode string) (bool, error) {
 		a.sessionLocked = false
 		if a.lockoutManager != nil {
 			_ = a.lockoutManager.RecordSuccess()
+		}
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "session:unlocked")
 		}
 		return true, nil
 	}
@@ -669,6 +689,7 @@ func (a *App) SetSecurityPreferences(prefs SecurityPreferences) error {
 
 // checkSessionLock returns error if lock is enabled and session is locked
 func (a *App) checkSessionLock() error {
+	a.waitForStartup()
 	a.sessionMu.RLock()
 	defer a.sessionMu.RUnlock()
 	if a.lockConfigEnabled && a.sessionLocked {
@@ -700,6 +721,7 @@ func (a *App) shutdown(ctx context.Context) {
 
 // GetPanels returns all configured panels
 func (a *App) GetPanels() ([]panel.Panel, error) {
+	a.waitForStartup()
 	if err := a.checkSessionLock(); err != nil {
 		return nil, err
 	}
@@ -711,6 +733,7 @@ func (a *App) GetPanels() ([]panel.Panel, error) {
 
 // GetActivePanel returns the currently active panel
 func (a *App) GetActivePanel() (*panel.Panel, error) {
+	a.waitForStartup()
 	if err := a.checkSessionLock(); err != nil {
 		return nil, err
 	}
@@ -3727,6 +3750,7 @@ func (a *App) PingActivePanel() (int64, error) {
 
 // DebugStatus holds current runtime debug toggle states
 type DebugStatus struct {
+	IsDebugBuild bool `json:"isDebugBuild"`
 	TPMAvailable bool `json:"tpmAvailable"`
 	TPMEnabled   bool `json:"tpmEnabled"`
 	DBConnected  bool `json:"dbConnected"`
@@ -3738,11 +3762,15 @@ func (a *App) GetDebugStatus() (*DebugStatus, error) {
 	if err := a.checkSessionLock(); err != nil {
 		return nil, err
 	}
+	if !isDebugBuild() {
+		return &DebugStatus{IsDebugBuild: false}, nil
+	}
 	dbConnected := false
 	if a.db != nil && a.db.Ping() == nil {
 		dbConnected = true
 	}
 	return &DebugStatus{
+		IsDebugBuild: true,
 		TPMAvailable: security.IsTPMHardwareBacked(),
 		TPMEnabled:   security.IsTPMEnabled(),
 		DBConnected:  dbConnected,
@@ -3755,6 +3783,9 @@ func (a *App) DebugSetTPMEnabled(enabled bool) error {
 	if err := a.checkSessionLock(); err != nil {
 		return err
 	}
+	if !isDebugBuild() {
+		return fmt.Errorf("debug manager is disabled in production builds")
+	}
 	security.SetTPMEnabled(enabled)
 	logger.Logger.Warn().Bool("tpmEnabled", enabled).Msg("Debug Manager toggled TPM 2.0 envelope mode")
 	return nil
@@ -3764,6 +3795,9 @@ func (a *App) DebugSetTPMEnabled(enabled bool) error {
 func (a *App) DebugTestCryptoRoundtrip() (string, error) {
 	if err := a.checkSessionLock(); err != nil {
 		return "", err
+	}
+	if !isDebugBuild() {
+		return "", fmt.Errorf("debug manager is disabled in production builds")
 	}
 	payload := []byte("synoradesk_debug_crypto_test_" + strconv.FormatInt(time.Now().UnixNano(), 10))
 	start := time.Now()
@@ -3790,6 +3824,9 @@ func (a *App) DebugTestCryptoRoundtrip() (string, error) {
 func (a *App) DebugToggleDBConnection(disconnect bool) (string, error) {
 	if err := a.checkSessionLock(); err != nil {
 		return "", err
+	}
+	if !isDebugBuild() {
+		return "", fmt.Errorf("debug manager is disabled in production builds")
 	}
 	if disconnect {
 		if a.db != nil {

@@ -2,6 +2,33 @@
 
 All notable changes to **SynoraDesk** are documented in this file.
 
+## [1.06A] - 2026-11-28
+
+### Added
+- Starting Screen (`SplashScreen`) with progress bar and protective backdrop overlay while initializing security, panels, and accounts.
+- Admin Panel management views (`frontend/src/pages/admin/*`) for Nodes, Locations, Nests, Eggs, Allocations, Databases, Servers, Users, and Panel Settings.
+- Passcode-bound AES-256-GCM encryption (`SDPASS1\x00`) derived via Argon2id (`DerivePasscodeKey`) wrapping TPM 2.0 + Windows DPAPI (`SDTPM2`) for sensitive panel credentials.
+- Debug-only lock reset flag (`-debug-reset-lock`) and local debug recovery key (`//go:build debug`), completely excluded from production builds (`//go:build !debug`).
+- URL validation (`url_validation.go`, `safeUrl.ts`) and security audit documentation (`SECURITY_AUDIT.md`).
+
+### Changed
+- Optimized TPM 2.0 KEK warm-up caching and panel/account startup loading latency.
+- Separated `EncryptSystem` (DPAPI + TPM 2.0 only) for boot-time metadata (`app_lock.dat`, `security_lockout.dat`) so lockout and lock state remain readable before unlock.
+- Updated WiX v7 installer configuration (`Package.wxs`, `build-msi.ps1`) to version `1.06A` (`1.0.6`).
+
+### Security
+- Cleared in-memory passcode-derived AES keys (`ClearPasscodeKey`) on `LockSession` and `shutdown`; deleting `app_lock.dat` in production builds no longer allows decrypting `SDPASS1` panel credentials without the passcode.
+- Restricted **Debug Manager** tab and `Debug*` backend controls (`DebugSetTPMEnabled`, `DebugTestCryptoRoundtrip`, `DebugToggleDBConnection`) strictly to `//go:build debug` builds.
+- Enforced fail-closed `AppLockScreen` rendering whenever `isLocked` is true (defaulting to password mode if lock type is not yet resolved).
+
+### Fixed
+- Fixed startup race condition where `GetLockType`, `GetPanels`, `GetActivePanel`, and `checkSessionLock` could run before `startup()` finished initializing SQLite and `panelManager`, causing empty panel/DB views or hidden lock screen until reload.
+- Added silent upgrade migration on startup/unlock: legacy `SDPASS1`-sealed `security_lockout.dat` files no longer trigger a false 15-minute lockout, and pre-`SDPASS1` `app_lock.dat` configurations automatically migrate panel keys on first unlock.
+- Fixed unstyled current-passcode input and surfaced backend lockout/passcode error messages in `SecuritySettingsCard.tsx`.
+- Added missing `security.lockedOutInputBlocked` and `security.lockedOutInputBlockedDesc` keys to `en.json` and `vi.json`.
+
+---
+
 ## [1.05A] - 2026-11-24
 
 ### Added

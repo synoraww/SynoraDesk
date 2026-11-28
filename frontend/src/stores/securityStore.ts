@@ -80,8 +80,11 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     localStorage.removeItem('pterodesk_passcode_hash');
     localStorage.removeItem('pterodesk_salt');
     try {
-      const type = (await GetLockType()) as LockType;
+      let type = (await GetLockType()) as LockType;
       const locked = await IsSessionLocked();
+      if (locked && type === 'none') {
+        type = 'password';
+      }
       let effectiveLockOnLaunch = true;
       let effectiveAutoLock = 0;
       try {

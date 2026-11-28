@@ -221,6 +221,19 @@ export function App() {
           fetchActivePanel();
         }
       });
+      // @ts-ignore
+      window.runtime.EventsOn('app:ready', async () => {
+        await useSecurityStore.getState().initSecurity();
+        if (!useSecurityStore.getState().isLocked) {
+          fetchPanels();
+          fetchActivePanel();
+        }
+      });
+      // @ts-ignore
+      window.runtime.EventsOn('session:unlocked', () => {
+        fetchPanels();
+        fetchActivePanel();
+      });
     }
   }, []);
 

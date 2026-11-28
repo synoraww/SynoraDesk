@@ -114,7 +114,7 @@ export const AppLockScreen: React.FC = () => {
     setTimeout(() => setIsError(false), 800);
   };
 
-  if (!isLocked || lockType === 'none') {
+  if (!isLocked) {
     return null;
   }
 

@@ -133,6 +133,7 @@ interface SystemDiagnosticsModalProps {
 }
 
 interface DebugStatus {
+  isDebugBuild?: boolean;
   tpmAvailable: boolean;
   tpmEnabled: boolean;
   dbConnected: boolean;
@@ -489,9 +490,11 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
           <button type="button" style={tabBtnStyle('system')} onClick={() => setActiveTab('system')}>
             Hệ thống, DB & Nhật ký ({(diagnostics?.recentLogErrors?.length || 0) + (diagnostics?.recentFailedActions?.length || 0)})
           </button>
-          <button type="button" style={tabBtnStyle('debug')} onClick={() => { setActiveTab('debug'); fetchDebugStatus(); }}>
-            Debug Manager
-          </button>
+          {debugStatus?.isDebugBuild && (
+            <button type="button" style={tabBtnStyle('debug')} onClick={() => { setActiveTab('debug'); fetchDebugStatus(); }}>
+              Debug Manager
+            </button>
+          )}
         </div>
 
         {/* Content */}
@@ -828,8 +831,8 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                 </>
               )}
 
-              {/* TAB 5: DEBUG MANAGER */}
-              {activeTab === 'debug' && (
+              {/* TAB 5: DEBUG MANAGER (Debug builds only) */}
+              {activeTab === 'debug' && debugStatus?.isDebugBuild && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div
                     style={{

@@ -14,6 +14,10 @@ import (
 
 var debugResetLockFlag = flag.Bool("debug-reset-lock", false, "Debug only: clear App Lock and Lockout state before starting")
 
+func isDebugBuild() bool {
+	return true
+}
+
 func runDebugLockResetIfRequested() {
 	if debugResetLockFlag == nil || !*debugResetLockFlag {
 		return

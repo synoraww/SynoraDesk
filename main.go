@@ -29,6 +29,7 @@ func main() {
 	runDebugLockResetIfRequested()
 
 	app := NewApp()
+	app.startupDone = make(chan struct{})
 	windowTitle := "SynoraDesk"
 	width := 1400
 	height := 900
