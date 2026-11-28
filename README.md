@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/1.png" alt="SynoraDesk Preview" width="95%" />
+  <img src="assets/4.png" alt="SynoraDesk Preview" width="95%" />
 </p>
 
 <p align="center">
